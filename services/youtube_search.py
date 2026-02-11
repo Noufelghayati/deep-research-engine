@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import List
+from typing import List, Optional
 from urllib.parse import unquote, quote_plus
 
 import httpx
@@ -29,7 +29,7 @@ _YT_VIDEO_ID_RE = re.compile(
 )
 
 
-def _extract_video_id(url: str) -> str | None:
+def _extract_video_id(url: str) -> Optional[str]:
     """Extract the 11-char video ID from a YouTube URL."""
     m = _YT_VIDEO_ID_RE.search(url)
     return m.group(1) if m else None
