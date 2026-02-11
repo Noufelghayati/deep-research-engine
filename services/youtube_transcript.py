@@ -158,6 +158,7 @@ def _download_audio_sync(video_id: str) -> Optional[Path]:
         "fragment_retries": 5,
         "file_access_retries": 3,
         "http_chunk_size": 1048576,  # 1MB chunks for more reliable downloads
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
     if settings.webshare_proxy_url:
         ydl_opts["proxy"] = settings.webshare_proxy_url
@@ -401,6 +402,7 @@ def fallback_transcribe_with_progress_sync(
         "file_access_retries": 3,
         "http_chunk_size": 1048576,
         "progress_hooks": [progress_hook],
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
     if settings.webshare_proxy_url:
         ydl_opts["proxy"] = settings.webshare_proxy_url
