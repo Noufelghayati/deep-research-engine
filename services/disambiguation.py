@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from models.internal import YouTubeCandidate, ScoredVideo
 from services.youtube_transcript import fetch_transcript
 from config import settings
@@ -203,21 +203,21 @@ async def score_and_filter(
     person_name: Optional[str],
     company_name: str,
     max_keep: int = 2,
-) -> List[ScoredVideo]:
-    """Score all candidates, filter by threshold, return top max_keep."""
-    scored = []
+) -> Tuple[List[ScoredVideo], List[ScoredVideo]]:
+    """Score all candidates, filter by threshold. Returns (kept, all_scored)."""
+    all_scored = []
     for c in candidates:
         sv = await score_candidate(
             c, person_name, company_name, fetch_transcript_for_scoring=False
         )
-        if sv.match_score >= settings.disambiguation_threshold:
-            scored.append(sv)
+        all_scored.append(sv)
 
-    scored.sort(key=lambda x: x.match_score, reverse=True)
-    kept = scored[:max_keep]
+    passed = [s for s in all_scored if s.match_score >= settings.disambiguation_threshold]
+    passed.sort(key=lambda x: x.match_score, reverse=True)
+    kept = passed[:max_keep]
 
     logger.info(
         f"Disambiguation: {len(candidates)} candidates -> "
-        f"{len(scored)} passed threshold -> keeping {len(kept)}"
+        f"{len(passed)} passed threshold -> keeping {len(kept)}"
     )
-    return kept
+    return kept, all_scored

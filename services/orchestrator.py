@@ -34,6 +34,7 @@ def _compute_result_strength(videos: List[ScoredVideo]) -> float:
 async def _step1_person_youtube(
     request: ResearchRequest,
     artifacts: CollectedArtifacts,
+    emit=None,
 ) -> float:
     """
     Step 1: Person-level YouTube search.
@@ -41,6 +42,8 @@ async def _step1_person_youtube(
     """
     if not request.target_name:
         logger.info("Step 1 skipped: no target_name provided")
+        if emit:
+            await emit("log", step="step1", message="Skipped: no target name provided")
         return 0.0
 
     logger.info(f"Step 1: Person-level YouTube for '{request.target_name}'")
@@ -61,34 +64,60 @@ async def _step1_person_youtube(
         candidates = await search_youtube(
             query, max_results=settings.youtube_search_max_results
         )
+        new_count = 0
         for c in candidates:
             if c.video_id not in seen_ids:
                 seen_ids.add(c.video_id)
                 all_candidates.append(c)
+                new_count += 1
+        if emit:
+            await emit("log", step="step1", message=f"Query: \"{query}\" \u2192 {len(candidates)} result(s), {new_count} new")
 
-    step1_videos = await score_and_filter(
+    if emit:
+        await emit("log", step="step1", message=f"Total unique candidates: {len(all_candidates)}")
+
+    step1_videos, all_scored = await score_and_filter(
         all_candidates,
         request.target_name,
         request.target_company,
         max_keep=2,
     )
 
+    if emit:
+        for sv in all_scored:
+            passed = sv.match_score >= settings.disambiguation_threshold
+            status = "\u2713" if passed else "\u2717"
+            signals = ", ".join(sv.match_signals) if sv.match_signals else "none"
+            await emit("log", step="step1", message=f"{status} \"{sv.title[:70]}\" = {sv.match_score} [{signals}]")
+        await emit("log", step="step1", message=f"Kept {len(step1_videos)} of {len(all_scored)} candidates (threshold \u2265 {settings.disambiguation_threshold})")
+
     # Ensure transcripts are fetched for accepted videos
     for video in step1_videos:
         if not video.transcript_text and not video.transcript_available:
+            if emit:
+                await emit("log", step="step1", message=f"Fetching transcript for {video.video_id}...")
             text, available = await fetch_transcript(video.video_id)
             video.transcript_text = text
             video.transcript_available = available
+            if emit:
+                if available:
+                    length = len(text) if text else 0
+                    await emit("log", step="step1", message=f"Transcript ready ({length:,} chars)")
+                else:
+                    await emit("log", step="step1", message="Transcript not available")
 
     artifacts.videos.extend(step1_videos)
     strength = _compute_result_strength(step1_videos)
     logger.info(f"Step 1 result: {len(step1_videos)} videos, strength={strength:.2f}")
+    if emit:
+        await emit("log", step="step1", message=f"Result strength: {strength:.2f}")
     return strength
 
 
 async def _step2_company_leadership(
     request: ResearchRequest,
     artifacts: CollectedArtifacts,
+    emit=None,
 ) -> None:
     """
     Step 2: Company leadership YouTube fallback.
@@ -119,25 +148,48 @@ async def _step2_company_leadership(
 
     for i, query in enumerate(queries):
         if i > 0:
-            await asyncio.sleep(2.0)  # DDG rate-limit avoidance
+            await asyncio.sleep(2.0)
         candidates = await search_youtube(query, max_results=5)
+        new_count = 0
         for c in candidates:
             if c.video_id not in seen_ids:
                 seen_ids.add(c.video_id)
                 all_candidates.append(c)
+                new_count += 1
+        if emit:
+            await emit("log", step="step2", message=f"Query: \"{query}\" \u2192 {len(candidates)} result(s), {new_count} new")
 
-    step2_videos = await score_and_filter(
+    if emit:
+        await emit("log", step="step2", message=f"Total unique candidates: {len(all_candidates)}")
+
+    step2_videos, all_scored = await score_and_filter(
         all_candidates,
         request.target_name,
         request.target_company,
         max_keep=remaining_slots,
     )
 
+    if emit:
+        for sv in all_scored:
+            passed = sv.match_score >= settings.disambiguation_threshold
+            status = "\u2713" if passed else "\u2717"
+            signals = ", ".join(sv.match_signals) if sv.match_signals else "none"
+            await emit("log", step="step2", message=f"{status} \"{sv.title[:70]}\" = {sv.match_score} [{signals}]")
+        await emit("log", step="step2", message=f"Kept {len(step2_videos)} of {len(all_scored)} candidates (threshold \u2265 {settings.disambiguation_threshold})")
+
     for video in step2_videos:
         if not video.transcript_text:
+            if emit:
+                await emit("log", step="step2", message=f"Fetching transcript for {video.video_id}...")
             text, available = await fetch_transcript(video.video_id)
             video.transcript_text = text
             video.transcript_available = available
+            if emit:
+                if available:
+                    length = len(text) if text else 0
+                    await emit("log", step="step2", message=f"Transcript ready ({length:,} chars)")
+                else:
+                    await emit("log", step="step2", message="Transcript not available")
 
     artifacts.videos.extend(step2_videos)
     logger.info(f"Step 2 result: {len(step2_videos)} additional videos")
@@ -146,6 +198,7 @@ async def _step2_company_leadership(
 async def _step3_article_supplement(
     request: ResearchRequest,
     artifacts: CollectedArtifacts,
+    emit=None,
 ) -> None:
     """
     Step 3: Article fallback/supplement.
@@ -161,6 +214,8 @@ async def _step3_article_supplement(
     )
 
     if not needs_article:
+        if emit:
+            await emit("log", step="step3", message=f"Skipped: strength={combined_strength:.2f}, artifacts={total_artifacts}/{max_total}")
         return
 
     logger.info("Step 3: Article supplement")
@@ -170,6 +225,22 @@ async def _step3_article_supplement(
         request.target_company,
         request.target_name,
     )
+
+    if emit:
+        for entry in article_log:
+            status_icon = {
+                "accepted": "\u2713",
+                "rejected_no_company_mention": "\u2717",
+                "fetch_failed": "!",
+                "skipped_domain": "\u2014",
+                "no_results": "\u2014",
+                "search_error": "!",
+                "rejected_too_old": "\u2717",
+            }.get(entry.status, "?")
+            url_part = f" {entry.url[:80]}" if entry.url else ""
+            source_part = f" [{entry.source}]" if entry.source else ""
+            await emit("log", step="step3", message=f"{status_icon} [{entry.status}]{source_part}{url_part} \u2014 {entry.reason}")
+
     artifacts.article_search_log = article_log
     if article:
         artifacts.articles.append(article)
@@ -188,6 +259,8 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         if on_progress:
             await on_progress(event_type, kwargs)
 
+    _emit = emit if on_progress else None
+
     artifacts = CollectedArtifacts(
         person_name=request.target_name,
         company_name=request.target_company,
@@ -196,7 +269,7 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
 
     # Step 1: Person-level YouTube
     await emit("step", step="step1", status="searching", message="Searching YouTube for target person videos...")
-    step1_strength = await _step1_person_youtube(request, artifacts)
+    step1_strength = await _step1_person_youtube(request, artifacts, emit=_emit)
     for v in artifacts.videos:
         await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
     await emit("step", step="step1", status="done", message=f"Found {len(artifacts.videos)} person video(s)")
@@ -205,7 +278,7 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     if step1_strength < settings.weak_result_threshold:
         prev_count = len(artifacts.videos)
         await emit("step", step="step2", status="searching", message="Searching for company leadership videos...")
-        await _step2_company_leadership(request, artifacts)
+        await _step2_company_leadership(request, artifacts, emit=_emit)
         new_videos = artifacts.videos[prev_count:]
         for v in new_videos:
             await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
@@ -222,13 +295,18 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
 
     # Step 3: Article supplement
     await emit("step", step="step3", status="searching", message="Searching for articles...")
-    await _step3_article_supplement(request, artifacts)
+    await _step3_article_supplement(request, artifacts, emit=_emit)
     for a in artifacts.articles:
         await emit("found", kind="article", title=a.title)
     await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
 
     # Synthesis
     await emit("step", step="synthesis", status="running", message="Generating research report with Gemini...")
+    if on_progress:
+        video_count = len(artifacts.videos)
+        article_count = len(artifacts.articles)
+        transcript_count = sum(1 for v in artifacts.videos if v.transcript_available)
+        await emit("log", step="synthesis", message=f"Sending {video_count} video(s) ({transcript_count} with transcripts) + {article_count} article(s) to Gemini...")
     logger.info(
         f"Synthesis: {len(artifacts.videos)} videos, "
         f"{len(artifacts.articles)} articles, "

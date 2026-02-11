@@ -192,7 +192,7 @@
         <div class="spinner"></div>
         <span id="loadingText">Starting research...</span>
       </div>
-      <div id="progressLog" style="display:none;margin-top:14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:14px;font-size:13px;line-height:2;"></div>
+      <div id="progressLog" style="display:none;margin-top:14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:14px;font-size:13px;line-height:1.8;"></div>
       <div class="error-box" id="errorBox"></div>
     </div>
 
@@ -239,6 +239,19 @@
   </div>
 
   <script>
+    function toggleStepLogs(stepId) {
+      const logsDiv = document.getElementById('logs-' + stepId);
+      const link = document.getElementById('toggle-' + stepId);
+      if (!logsDiv || !link) return;
+      if (logsDiv.style.display === 'none') {
+        logsDiv.style.display = 'block';
+        link.textContent = 'Hide Logs';
+      } else {
+        logsDiv.style.display = 'none';
+        link.textContent = 'Show Logs';
+      }
+    }
+
     function runResearch() {
       const company = document.getElementById('target_company').value.trim();
       if (!company) { alert('Target Company is required'); return; }
@@ -265,8 +278,33 @@
         if (val) body[f] = val;
       });
 
-      function addLogLine(html) {
-        progressLog.innerHTML += `<div>${html}</div>`;
+      let currentStep = null;
+      const stepHasLogs = {};
+
+      function ensureStepContainer(stepId) {
+        if (document.getElementById('step-' + stepId)) return;
+        const container = document.createElement('div');
+        container.id = 'step-' + stepId;
+        container.style.cssText = 'margin-bottom:6px;';
+        container.innerHTML =
+          '<div id="header-' + stepId + '"></div>' +
+          '<div id="logs-' + stepId + '" style="display:none;margin-left:22px;padding:6px 0 2px 10px;border-left:2px solid #21262d;color:#8b949e;font-size:12px;line-height:1.7;"></div>' +
+          '<div id="items-' + stepId + '" style="margin-left:18px;"></div>';
+        progressLog.appendChild(container);
+      }
+
+      function addLogDetail(stepId, html) {
+        const logsDiv = document.getElementById('logs-' + stepId);
+        if (!logsDiv) return;
+        logsDiv.innerHTML += '<div>' + html + '</div>';
+        stepHasLogs[stepId] = true;
+        progressLog.scrollTop = progressLog.scrollHeight;
+      }
+
+      function addFoundItem(stepId, html) {
+        const itemsDiv = document.getElementById('items-' + stepId);
+        if (!itemsDiv) return;
+        itemsDiv.innerHTML += '<div>' + html + '</div>';
         progressLog.scrollTop = progressLog.scrollHeight;
       }
 
@@ -292,25 +330,40 @@
                 const evt = JSON.parse(line.slice(6));
 
                 if (evt.type === 'step') {
+                  ensureStepContainer(evt.step);
+                  const header = document.getElementById('header-' + evt.step);
                   if (evt.status === 'searching' || evt.status === 'running') {
+                    currentStep = evt.step;
                     loadingText.textContent = evt.message;
-                    addLogLine(`<span style="color:#8b949e;">&#9679;</span> ${evt.message}`);
+                    header.innerHTML = '<span style="color:#8b949e;">&#9679;</span> ' + evt.message;
                   } else if (evt.status === 'done') {
-                    addLogLine(`<span style="color:#3fb950;">&#10003;</span> ${evt.message}`);
+                    const toggleHtml = stepHasLogs[evt.step]
+                      ? ' <a id="toggle-' + evt.step + '" href="#" onclick="event.preventDefault();toggleStepLogs(\'' + evt.step + '\')" style="color:#58a6ff;font-size:11px;text-decoration:none;margin-left:6px;">Show Logs</a>'
+                      : '';
+                    header.innerHTML = '<span style="color:#3fb950;">&#10003;</span> ' + evt.message + toggleHtml;
                   }
                 }
+                else if (evt.type === 'log') {
+                  ensureStepContainer(evt.step);
+                  addLogDetail(evt.step, evt.message);
+                }
                 else if (evt.type === 'found') {
+                  const stepId = currentStep || 'step1';
                   const icon = evt.kind === 'video' ? '&#127909;' : '&#128196;';
-                  const score = evt.score ? ` <span style="color:#8b949e;">(${evt.score})</span>` : '';
-                  addLogLine(`&nbsp;&nbsp;${icon} ${evt.title}${score}`);
+                  const score = evt.score ? ' <span style="color:#8b949e;">(' + evt.score + ')</span>' : '';
+                  addFoundItem(stepId, icon + ' ' + evt.title + score);
                 }
                 else if (evt.type === 'transcript') {
                   if (evt.status === 'fetching') {
-                    addLogLine(`&nbsp;&nbsp;<span style="color:#d29922;">&#9997;</span> Transcribing: ${evt.video}`);
+                    const stepId = currentStep || 'step1';
+                    addFoundItem(stepId, '<span style="color:#d29922;">&#9997;</span> Transcribing: ' + evt.video);
                   }
                 }
                 else if (evt.type === 'result') {
-                  addLogLine(`<span style="color:#3fb950;">&#10003;</span> Done in ${evt.elapsed}s`);
+                  const doneDiv = document.createElement('div');
+                  doneDiv.style.marginTop = '6px';
+                  doneDiv.innerHTML = '<span style="color:#3fb950;">&#10003;</span> Done in ' + evt.elapsed + 's';
+                  progressLog.appendChild(doneDiv);
                   renderResults(evt.data);
                   results.classList.add('active');
                   btn.disabled = false;
