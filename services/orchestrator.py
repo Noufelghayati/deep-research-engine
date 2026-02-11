@@ -96,15 +96,13 @@ async def _step1_person_youtube(
         if not video.transcript_text and not video.transcript_available:
             if emit:
                 await emit("log", step="step1", message=f"Fetching transcript for {video.video_id}...")
-            text, available = await fetch_transcript(video.video_id)
+                async def _on_log_s1(msg):
+                    await emit("log", step="step1", message=f"  {msg}")
+                text, available = await fetch_transcript(video.video_id, on_log=_on_log_s1)
+            else:
+                text, available = await fetch_transcript(video.video_id)
             video.transcript_text = text
             video.transcript_available = available
-            if emit:
-                if available:
-                    length = len(text) if text else 0
-                    await emit("log", step="step1", message=f"Transcript ready ({length:,} chars)")
-                else:
-                    await emit("log", step="step1", message="Transcript not available")
 
     artifacts.videos.extend(step1_videos)
     strength = _compute_result_strength(step1_videos)
@@ -181,15 +179,13 @@ async def _step2_company_leadership(
         if not video.transcript_text:
             if emit:
                 await emit("log", step="step2", message=f"Fetching transcript for {video.video_id}...")
-            text, available = await fetch_transcript(video.video_id)
+                async def _on_log_s2(msg):
+                    await emit("log", step="step2", message=f"  {msg}")
+                text, available = await fetch_transcript(video.video_id, on_log=_on_log_s2)
+            else:
+                text, available = await fetch_transcript(video.video_id)
             video.transcript_text = text
             video.transcript_available = available
-            if emit:
-                if available:
-                    length = len(text) if text else 0
-                    await emit("log", step="step2", message=f"Transcript ready ({length:,} chars)")
-                else:
-                    await emit("log", step="step2", message="Transcript not available")
 
     artifacts.videos.extend(step2_videos)
     logger.info(f"Step 2 result: {len(step2_videos)} additional videos")
