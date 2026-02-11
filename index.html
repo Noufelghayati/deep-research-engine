@@ -332,14 +332,12 @@
                 if (evt.type === 'step') {
                   ensureStepContainer(evt.step);
                   const header = document.getElementById('header-' + evt.step);
+                  const toggleHtml = ' <a id="toggle-' + evt.step + '" href="#" onclick="event.preventDefault();toggleStepLogs(\'' + evt.step + '\')" style="color:#58a6ff;font-size:11px;text-decoration:none;margin-left:6px;">Show Logs</a>';
                   if (evt.status === 'searching' || evt.status === 'running') {
                     currentStep = evt.step;
                     loadingText.textContent = evt.message;
-                    header.innerHTML = '<span style="color:#8b949e;">&#9679;</span> ' + evt.message;
+                    header.innerHTML = '<span style="color:#8b949e;">&#9679;</span> ' + evt.message + toggleHtml;
                   } else if (evt.status === 'done') {
-                    const toggleHtml = stepHasLogs[evt.step]
-                      ? ' <a id="toggle-' + evt.step + '" href="#" onclick="event.preventDefault();toggleStepLogs(\'' + evt.step + '\')" style="color:#58a6ff;font-size:11px;text-decoration:none;margin-left:6px;">Show Logs</a>'
-                      : '';
                     header.innerHTML = '<span style="color:#3fb950;">&#10003;</span> ' + evt.message + toggleHtml;
                   }
                 }
