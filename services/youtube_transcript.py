@@ -76,6 +76,8 @@ def _fetch_existing_transcript_sync(video_id: str) -> Tuple[Optional[str], bool]
         if not snippets:
             return None, False
 
+        max_sec = settings.max_transcription_duration_sec
+        snippets = [s for s in snippets if s.start < max_sec]
         full_text = " ".join(s.text for s in snippets)
         full_text = clean_transcript_text(full_text)
 
@@ -305,8 +307,11 @@ def _fetch_transcript_with_timestamps_sync(video_id: str) -> Optional[List[Dict]
         if not snippets:
             return None
 
+        max_sec = settings.max_transcription_duration_sec
         segments = []
         for s in snippets:
+            if s.start >= max_sec:
+                break
             segments.append({
                 "text": s.text,
                 "start": s.start,
