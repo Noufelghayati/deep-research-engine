@@ -71,7 +71,34 @@ def _fetch_existing_transcript_sync(video_id: str) -> Tuple[Optional[str], bool]
     global _transcript_blocked
 
     try:
-        transcript = _ytt_api.fetch(video_id, languages=["en"])
+        # Try English first
+        try:
+            transcript = _ytt_api.fetch(video_id, languages=["en"])
+        except Exception:
+            # No English transcript — try any available language
+            transcript = None
+            try:
+                transcript_list = list(_ytt_api.list(video_id))
+                if transcript_list:
+                    t = transcript_list[0]
+                    logger.info(f"No English transcript for {video_id}, using {t.language} ({t.language_code})")
+                    # Try translating to English if possible
+                    if t.is_translatable:
+                        try:
+                            transcript = t.translate("en").fetch()
+                            logger.info(f"Translated {t.language_code} -> en for {video_id}")
+                        except Exception as te:
+                            logger.info(f"Translation failed for {video_id}: {te}, using original language")
+                            transcript = t.fetch()
+                    else:
+                        transcript = t.fetch()
+            except Exception as le:
+                logger.info(f"Could not list transcripts for {video_id}: {le}")
+                return None, False
+
+        if not transcript:
+            return None, False
+
         snippets = transcript.snippets
         if not snippets:
             return None, False
