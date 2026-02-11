@@ -148,7 +148,7 @@ def _download_audio_sync(video_id: str) -> Optional[Path]:
 
     # Download full audio, then trim afterward (download_ranges is unreliable for audio)
     ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio",
+        "format": "bestaudio",
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": False,
@@ -390,7 +390,7 @@ def fallback_transcribe_with_progress_sync(
             on_progress("download", 50, "Download complete")
 
     ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio",
+        "format": "bestaudio",
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": False,
