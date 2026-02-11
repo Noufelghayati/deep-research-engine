@@ -238,7 +238,7 @@
   </div>
 
   <script>
-    const API_URL = 'http://127.0.0.1:8001/api/v1/research';
+    const API_URL = '/api/v1/research';
 
     async function runResearch() {
       const company = document.getElementById('target_company').value.trim();
@@ -408,7 +408,7 @@
       pct.textContent = '0%';
       stage.textContent = 'Connecting...';
 
-      const sseUrl = `http://127.0.0.1:8001/api/v1/test-transcribe-stream?youtube_url=${encodeURIComponent(url)}`;
+      const sseUrl = `/api/v1/test-transcribe-stream?youtube_url=${encodeURIComponent(url)}`;
       const evtSource = new EventSource(sseUrl);
 
       evtSource.onmessage = function(event) {
