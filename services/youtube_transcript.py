@@ -135,7 +135,7 @@ def _download_audio_sync(video_id: str) -> Optional[Path]:
     _TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # Clean up any previously cached audio for this video
-    for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg"]:
+    for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg", "mp4"]:
         old = _TEMP_DIR / f"{video_id}.{ext}"
         if old.exists():
             old.unlink()
@@ -171,7 +171,7 @@ def _download_audio_sync(video_id: str) -> Optional[Path]:
 
         # Find the downloaded file
         audio_path = None
-        for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg"]:
+        for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg", "mp4"]:
             candidate = _TEMP_DIR / f"{video_id}.{ext}"
             if candidate.exists():
                 audio_path = candidate
@@ -369,7 +369,7 @@ def fallback_transcribe_with_progress_sync(
     on_progress("download", 0, "Starting audio download...")
 
     _TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg"]:
+    for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg", "mp4"]:
         old = _TEMP_DIR / f"{video_id}.{ext}"
         if old.exists():
             old.unlink()
@@ -413,7 +413,7 @@ def fallback_transcribe_with_progress_sync(
             info = ydl.extract_info(url, download=True)
             duration = info.get("duration", 0) or 0
 
-        for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg"]:
+        for ext in ["m4a", "webm", "opus", "mp3", "wav", "ogg", "mp4"]:
             candidate = _TEMP_DIR / f"{video_id}.{ext}"
             if candidate.exists():
                 audio_path = candidate
