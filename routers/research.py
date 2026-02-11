@@ -63,6 +63,46 @@ async def research(request: ResearchRequest) -> ResearchResponse:
         )
 
 
+@router.post("/research-stream", summary="Run research with SSE progress")
+async def research_stream(request: ResearchRequest):
+    progress_q: asyncio.Queue = asyncio.Queue()
+
+    async def on_progress(event_type: str, data: dict):
+        await progress_q.put({"type": event_type, **data})
+
+    async def generate():
+        start_time = time.time()
+        try:
+            task = asyncio.create_task(run_research(request, on_progress=on_progress))
+
+            while not task.done():
+                try:
+                    event = await asyncio.wait_for(progress_q.get(), timeout=0.5)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    pass
+
+            # Drain remaining events
+            while not progress_q.empty():
+                event = progress_q.get_nowait()
+                yield f"data: {json.dumps(event)}\n\n"
+
+            result = task.result()
+            elapsed = round(time.time() - start_time, 1)
+            yield f"data: {json.dumps({'type': 'result', 'elapsed': elapsed, 'data': result.model_dump()})}\n\n"
+
+        except Exception as e:
+            elapsed = round(time.time() - start_time, 1)
+            logger.error(f"Research stream failed after {elapsed}s: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}

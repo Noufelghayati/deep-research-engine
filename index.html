@@ -125,7 +125,7 @@
     <p class="subtitle">Sales prep powered by YouTube research + Gemini synthesis</p>
 
     <!-- Transcription Test -->
-    <div class="form-card" style="border-color:#d29922;">
+    <div class="form-card" style="border-color:#d29922;display:none;" id="transcriptionTestCard">
       <div class="section-title" style="color:#d29922;">Transcription Test (temporary)</div>
       <div style="display:flex;gap:10px;align-items:flex-end;">
         <div class="form-group" style="flex:1;">
@@ -190,8 +190,9 @@
       <button class="btn" id="runBtn" onclick="runResearch()">Run Research</button>
       <div class="loading" id="loading">
         <div class="spinner"></div>
-        <span id="loadingText">Researching... this may take 30-60 seconds</span>
+        <span id="loadingText">Starting research...</span>
       </div>
+      <div id="progressLog" style="display:none;margin-top:14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:14px;font-size:13px;line-height:2;"></div>
       <div class="error-box" id="errorBox"></div>
     </div>
 
@@ -238,21 +239,24 @@
   </div>
 
   <script>
-    const API_URL = '/api/v1/research';
-
-    async function runResearch() {
+    function runResearch() {
       const company = document.getElementById('target_company').value.trim();
       if (!company) { alert('Target Company is required'); return; }
 
       const btn = document.getElementById('runBtn');
       const loading = document.getElementById('loading');
+      const loadingText = document.getElementById('loadingText');
       const errorBox = document.getElementById('errorBox');
       const results = document.getElementById('results');
+      const progressLog = document.getElementById('progressLog');
 
       btn.disabled = true;
       loading.classList.add('active');
       errorBox.classList.remove('active');
       results.classList.remove('active');
+      progressLog.style.display = 'block';
+      progressLog.innerHTML = '';
+      loadingText.textContent = 'Starting research...';
 
       const body = { target_company: company };
       const optionalFields = ['target_name', 'target_title', 'user_role', 'your_name', 'your_company', 'context'];
@@ -261,28 +265,75 @@
         if (val) body[f] = val;
       });
 
-      try {
-        const resp = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+      function addLogLine(html) {
+        progressLog.innerHTML += `<div>${html}</div>`;
+        progressLog.scrollTop = progressLog.scrollHeight;
+      }
 
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-          throw new Error(err.detail?.error || err.detail || `HTTP ${resp.status}`);
+      fetch('/api/v1/research-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function read() {
+          reader.read().then(({ done, value }) => {
+            if (done) { btn.disabled = false; loading.classList.remove('active'); return; }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            lines.forEach(line => {
+              if (!line.startsWith('data: ')) return;
+              try {
+                const evt = JSON.parse(line.slice(6));
+
+                if (evt.type === 'step') {
+                  if (evt.status === 'searching' || evt.status === 'running') {
+                    loadingText.textContent = evt.message;
+                    addLogLine(`<span style="color:#8b949e;">&#9679;</span> ${evt.message}`);
+                  } else if (evt.status === 'done') {
+                    addLogLine(`<span style="color:#3fb950;">&#10003;</span> ${evt.message}`);
+                  }
+                }
+                else if (evt.type === 'found') {
+                  const icon = evt.kind === 'video' ? '&#127909;' : '&#128196;';
+                  const score = evt.score ? ` <span style="color:#8b949e;">(${evt.score})</span>` : '';
+                  addLogLine(`&nbsp;&nbsp;${icon} ${evt.title}${score}`);
+                }
+                else if (evt.type === 'transcript') {
+                  if (evt.status === 'fetching') {
+                    addLogLine(`&nbsp;&nbsp;<span style="color:#d29922;">&#9997;</span> Transcribing: ${evt.video}`);
+                  }
+                }
+                else if (evt.type === 'result') {
+                  addLogLine(`<span style="color:#3fb950;">&#10003;</span> Done in ${evt.elapsed}s`);
+                  renderResults(evt.data);
+                  results.classList.add('active');
+                  btn.disabled = false;
+                  loading.classList.remove('active');
+                }
+                else if (evt.type === 'error') {
+                  errorBox.textContent = 'Error: ' + evt.message;
+                  errorBox.classList.add('active');
+                  btn.disabled = false;
+                  loading.classList.remove('active');
+                }
+              } catch(e) {}
+            });
+            read();
+          });
         }
-
-        const data = await resp.json();
-        renderResults(data);
-        results.classList.add('active');
-      } catch (e) {
+        read();
+      }).catch(e => {
         errorBox.textContent = 'Error: ' + e.message;
         errorBox.classList.add('active');
-      } finally {
         btn.disabled = false;
         loading.classList.remove('active');
-      }
+      });
     }
 
     function renderResults(data) {

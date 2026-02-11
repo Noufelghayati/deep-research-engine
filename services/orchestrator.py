@@ -178,11 +178,16 @@ async def _step3_article_supplement(
         logger.info("Step 3 result: no article found")
 
 
-async def run_research(request: ResearchRequest) -> ResearchResponse:
+async def run_research(request: ResearchRequest, on_progress=None) -> ResearchResponse:
     """
     Execute the full research decision tree:
       Step 1 -> Step 2 (if weak) -> Step 3 (if thin) -> Synthesis
+    on_progress: optional async callable(event_type, data_dict)
     """
+    async def emit(event_type: str, **kwargs):
+        if on_progress:
+            await on_progress(event_type, kwargs)
+
     artifacts = CollectedArtifacts(
         person_name=request.target_name,
         company_name=request.target_company,
@@ -190,16 +195,40 @@ async def run_research(request: ResearchRequest) -> ResearchResponse:
     )
 
     # Step 1: Person-level YouTube
+    await emit("step", step="step1", status="searching", message="Searching YouTube for target person videos...")
     step1_strength = await _step1_person_youtube(request, artifacts)
+    for v in artifacts.videos:
+        await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
+    await emit("step", step="step1", status="done", message=f"Found {len(artifacts.videos)} person video(s)")
 
     # Step 2: Company leadership fallback (if Step 1 weak)
     if step1_strength < settings.weak_result_threshold:
+        prev_count = len(artifacts.videos)
+        await emit("step", step="step2", status="searching", message="Searching for company leadership videos...")
         await _step2_company_leadership(request, artifacts)
+        new_videos = artifacts.videos[prev_count:]
+        for v in new_videos:
+            await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
+        await emit("step", step="step2", status="done", message=f"Found {len(new_videos)} leadership video(s)")
+
+    # Fetch transcripts for videos that need them
+    for i, video in enumerate(artifacts.videos):
+        if video.transcript_available:
+            await emit("transcript", video=video.title, status="existing")
+        elif video.transcript_text:
+            await emit("transcript", video=video.title, status="existing")
+        else:
+            await emit("transcript", video=video.title, status="fetching")
 
     # Step 3: Article supplement
+    await emit("step", step="step3", status="searching", message="Searching for articles...")
     await _step3_article_supplement(request, artifacts)
+    for a in artifacts.articles:
+        await emit("found", kind="article", title=a.title)
+    await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
 
     # Synthesis
+    await emit("step", step="synthesis", status="running", message="Generating research report with Gemini...")
     logger.info(
         f"Synthesis: {len(artifacts.videos)} videos, "
         f"{len(artifacts.articles)} articles, "
@@ -208,4 +237,5 @@ async def run_research(request: ResearchRequest) -> ResearchResponse:
     artifacts.steps_attempted.append("synthesis")
 
     response = await synthesize(artifacts, request)
+    await emit("step", step="synthesis", status="done", message="Research complete!")
     return response
