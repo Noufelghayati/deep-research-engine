@@ -207,6 +207,15 @@ def _transcribe_with_gemini_sync(audio_path: Path) -> Optional[str]:
         logger.info(f"Uploading audio to Gemini: {audio_path.name}")
         uploaded_file = client.files.upload(file=audio_path)
 
+        # Wait for file to become ACTIVE (processing can take time for large files)
+        import time as _time
+        for _ in range(30):  # up to 60 seconds
+            status = client.files.get(name=uploaded_file.name)
+            if status.state.name == "ACTIVE":
+                break
+            logger.info(f"Waiting for Gemini file processing... state={status.state.name}")
+            _time.sleep(2)
+
         # Transcribe
         response = client.models.generate_content(
             model=settings.gemini_model,
@@ -441,10 +450,20 @@ def fallback_transcribe_with_progress_sync(
         on_progress("upload", 58, "Uploading audio to Gemini...")
         client = genai.Client(api_key=settings.gemini_api_key)
         uploaded_file = client.files.upload(file=audio_path)
-        on_progress("upload", 70, "Upload complete")
+        on_progress("upload", 68, "Upload complete, processing...")
 
-        # --- Phase 3: Transcribe (70–95%) ---
-        on_progress("transcribe", 72, "Transcribing with Gemini...")
+        # Wait for file to become ACTIVE
+        import time as _time
+        for i in range(30):
+            status = client.files.get(name=uploaded_file.name)
+            if status.state.name == "ACTIVE":
+                break
+            on_progress("upload", 68 + min(i, 5), f"Gemini processing file... ({i*2}s)")
+            _time.sleep(2)
+        on_progress("upload", 72, "File ready")
+
+        # --- Phase 3: Transcribe (72–95%) ---
+        on_progress("transcribe", 74, "Transcribing with Gemini...")
 
         response = client.models.generate_content(
             model=settings.gemini_model,
