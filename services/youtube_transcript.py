@@ -358,10 +358,16 @@ async def fetch_transcript(video_id: str) -> Tuple[Optional[str], bool]:
     1. Existing YouTube transcript (youtube-transcript-api)
     2. Audio download + Gemini transcription (yt-dlp + Gemini)
     Returns (transcript_text, is_available).
+    Timeout: 5 minutes max to prevent blocking the pipeline.
     """
-    # Circuit breaker only blocks existing transcript fetch;
-    # audio fallback uses a different path so still worth trying
-    return await asyncio.to_thread(_fetch_transcript_sync, video_id)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_transcript_sync, video_id),
+            timeout=300,  # 5 minutes
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Transcript fetch timed out after 5 min for {video_id}")
+        return None, False
 
 
 async def fetch_transcript_with_timestamps(
