@@ -188,6 +188,82 @@
     .source-item a { color: #58a6ff; text-decoration: none; }
     .source-item a:hover { text-decoration: underline; }
 
+    /* Executive Orientation (Quick Prep) */
+    .executive-orientation {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 18px 22px; margin-bottom: 16px;
+    }
+    .orientation-header {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: #8b949e; margin-bottom: 12px; padding-bottom: 6px;
+      border-bottom: 1px solid #21262d;
+    }
+    .orientation-line {
+      font-size: 14px; line-height: 1.7; color: #c9d1d9;
+      padding: 2px 0 2px 16px; position: relative;
+    }
+    .orientation-line::before {
+      content: '\2022'; position: absolute; left: 0; color: #484f58;
+    }
+    .orientation-vulnerable {
+      color: #f85149;
+    }
+
+    /* Research Confidence badge */
+    .confidence-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .confidence-badge.high { background: #23863615; color: #3fb950; border: 1px solid #23863644; }
+    .confidence-badge.medium { background: #d2992215; color: #d29922; border: 1px solid #d2992244; }
+    .confidence-badge.low { background: #f8514915; color: #f85149; border: 1px solid #f8514944; }
+
+    /* Thin Signal Warning */
+    .thin-signal-warning {
+      background: #f8514910; border: 1px solid #f8514930; border-radius: 8px;
+      padding: 10px 16px; color: #f85149; font-size: 13px; margin-bottom: 16px;
+    }
+
+    /* Executive Profile section */
+    .leadership-grid {
+      display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+      font-size: 14px; margin-bottom: 14px;
+    }
+    .leadership-label {
+      color: #8b949e; font-weight: 600; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.5px; padding-top: 2px;
+    }
+    .leadership-value { color: #c9d1d9; line-height: 1.6; }
+    .leadership-implication {
+      grid-column: 1 / -1; font-size: 13px; color: #58a6ff;
+      font-style: italic; margin-top: 4px; padding-left: 4px;
+    }
+    .pressure-point { margin-bottom: 12px; }
+    .pressure-point:last-child { margin-bottom: 0; }
+    .pressure-name {
+      font-size: 13px; font-weight: 700; color: #f85149; margin-bottom: 2px;
+    }
+    .pressure-why {
+      font-size: 13px; color: #c9d1d9; line-height: 1.6; margin-bottom: 2px;
+    }
+    .pressure-evidence {
+      font-size: 12px; color: #8b949e; font-style: italic; line-height: 1.5;
+    }
+
+    /* Strategic Implication line (under each theme) */
+    .theme-implication {
+      font-size: 13px; color: #58a6ff; font-style: italic;
+      padding: 4px 0 0 16px; margin-bottom: 2px;
+    }
+
+    /* Grouped Momentum */
+    .momentum-period-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: #58a6ff; margin-top: 12px; margin-bottom: 6px;
+    }
+    .momentum-period-title:first-child { margin-top: 0; }
+
     /* Error */
     .error-box { background: #f8514915; border: 1px solid #f8514944; border-radius: 8px; padding: 16px; color: #f85149; font-size: 14px; margin-top: 16px; display: none; }
     .error-box.active { display: block; }
@@ -276,6 +352,9 @@
 
       <!-- Person header -->
       <div class="person-header" id="personHeader"></div>
+
+      <!-- Executive Orientation -->
+      <div class="executive-orientation" id="executiveOrientation" style="display:none;"></div>
 
       <!-- Tabs -->
       <div class="view-tabs">
@@ -496,6 +575,21 @@
         warningBanner.classList.remove('active');
       }
 
+      // ── Executive Orientation (between header and signals) ──
+      const orientationEl = document.getElementById('executiveOrientation');
+      const eo = data.executive_orientation;
+      if (eo && (eo.growth_posture || eo.functional_bias || eo.role_context || eo.vulnerable)) {
+        let eoHtml = '<div class="orientation-header">\uD83E\uDDED Executive Orientation</div>';
+        if (eo.growth_posture) eoHtml += '<div class="orientation-line">' + escHtml(eo.growth_posture) + '</div>';
+        if (eo.functional_bias) eoHtml += '<div class="orientation-line">' + escHtml(eo.functional_bias) + '</div>';
+        if (eo.role_context) eoHtml += '<div class="orientation-line">' + escHtml(eo.role_context) + '</div>';
+        if (eo.vulnerable) eoHtml += '<div class="orientation-line orientation-vulnerable">' + escHtml(eo.vulnerable) + '</div>';
+        orientationEl.innerHTML = eoHtml;
+        orientationEl.style.display = '';
+      } else {
+        orientationEl.style.display = 'none';
+      }
+
       // ── VIEW 1: Quick Prep signals ──
       const container = document.getElementById('signalsContainer');
       container.innerHTML = '';
@@ -561,6 +655,22 @@
 
       let html = '';
 
+      // Research Confidence badge
+      const rc = dossier.research_confidence;
+      if (rc && rc.level) {
+        const lvl = rc.level.toLowerCase();
+        const icons = { high: '\u2705', medium: '\u26A0\uFE0F', low: '\uD83D\uDD34' };
+        html += '<div class="confidence-badge ' + lvl + '">' +
+          (icons[lvl] || '') + ' Research Confidence: ' + lvl.charAt(0).toUpperCase() + lvl.slice(1) +
+          (rc.label ? ' \u2014 ' + escHtml(rc.label) : '') +
+          '</div>';
+      }
+
+      // Thin Signal Warning
+      if (dossier.thin_signal_warning) {
+        html += '<div class="thin-signal-warning">\u26A0\uFE0F ' + escHtml(dossier.thin_signal_warning) + '</div>';
+      }
+
       // Section 1: Background
       const bg = (dossier.background && dossier.background.bullets) || [];
       if (bg.length > 0) {
@@ -572,7 +682,52 @@
         html += '</div>';
       }
 
-      // Section 2: Strategic Focus
+      // Section 2: Executive Profile & Strategic Context
+      const ep = dossier.executive_profile;
+      if (ep) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Executive Profile &amp; Strategic Context</div>';
+
+        // Leadership Orientation
+        const lo = ep.leadership_orientation;
+        if (lo && (lo.growth_stage || lo.strategic_posture || lo.decision_making_bias)) {
+          html += '<div style="font-size:13px;font-weight:700;color:#8b949e;margin-bottom:8px;">\uD83C\uDFAF Leadership Orientation</div>';
+          html += '<div class="leadership-grid">';
+          if (lo.growth_stage) {
+            html += '<div class="leadership-label">Growth Stage</div>';
+            html += '<div class="leadership-value">' + escHtml(lo.growth_stage) + '</div>';
+          }
+          if (lo.strategic_posture) {
+            html += '<div class="leadership-label">Strategic Posture</div>';
+            html += '<div class="leadership-value">' + escHtml(lo.strategic_posture) + '</div>';
+          }
+          if (lo.decision_making_bias) {
+            html += '<div class="leadership-label">Decision Bias</div>';
+            html += '<div class="leadership-value">' + escHtml(lo.decision_making_bias) + '</div>';
+          }
+          if (lo.strategic_implication) {
+            html += '<div class="leadership-implication">\u2192 ' + escHtml(lo.strategic_implication) + '</div>';
+          }
+          html += '</div>';
+        }
+
+        // Pressure Points
+        const pp = ep.pressure_points || [];
+        if (pp.length > 0) {
+          html += '<div style="font-size:13px;font-weight:700;color:#8b949e;margin-top:16px;margin-bottom:8px;">\uD83D\uDEA8 Pressure Points &amp; Vulnerabilities</div>';
+          pp.forEach(function(p) {
+            html += '<div class="pressure-point">';
+            html += '<div class="pressure-name">' + escHtml(p.name || '') + '</div>';
+            if (p.why_it_matters) html += '<div class="pressure-why">' + escHtml(p.why_it_matters) + '</div>';
+            if (p.evidence) html += '<div class="pressure-evidence">' + escHtml(p.evidence) + '</div>';
+            html += '</div>';
+          });
+        }
+
+        html += '</div>';
+      }
+
+      // Section 3: Strategic Focus
       const themes = (dossier.strategic_focus && dossier.strategic_focus.themes) || [];
       if (themes.length > 0) {
         html += '<div class="dossier-section">';
@@ -583,12 +738,15 @@
           (t.bullets || []).forEach(function(b) {
             html += '<div class="theme-bullet">' + escHtml(b) + '</div>';
           });
+          if (t.strategic_implication) {
+            html += '<div class="theme-implication">\u2192 ' + escHtml(t.strategic_implication) + '</div>';
+          }
           html += '</div>';
         });
         html += '</div>';
       }
 
-      // Section 3: Quotes
+      // Section 4: Quotes
       const quotes = dossier.quotes || [];
       if (quotes.length > 0) {
         html += '<div class="dossier-section">';
@@ -603,18 +761,29 @@
         html += '</div>';
       }
 
-      // Section 4: Momentum
-      const momentum = (dossier.momentum && dossier.momentum.bullets) || [];
-      if (momentum.length > 0) {
+      // Section 5: Momentum (grouped or flat fallback)
+      const momentumGrouped = dossier.momentum_grouped || [];
+      const momentumFlat = (dossier.momentum && dossier.momentum.bullets) || [];
+      if (momentumGrouped.length > 0) {
         html += '<div class="dossier-section">';
         html += '<div class="dossier-section-title">Recent Company Momentum</div>';
-        momentum.forEach(function(b) {
+        momentumGrouped.forEach(function(g) {
+          if (g.period) html += '<div class="momentum-period-title">' + escHtml(g.period) + '</div>';
+          (g.bullets || []).forEach(function(b) {
+            html += '<div class="dossier-bullet">' + escHtml(b) + '</div>';
+          });
+        });
+        html += '</div>';
+      } else if (momentumFlat.length > 0) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Recent Company Momentum</div>';
+        momentumFlat.forEach(function(b) {
           html += '<div class="dossier-bullet">' + escHtml(b) + '</div>';
         });
         html += '</div>';
       }
 
-      // Section 5: Source Appendix
+      // Section 6: Source Appendix
       const sources = dossier.sources || [];
       if (sources.length > 0) {
         const primary = sources.filter(function(s) { return s.type === 'primary'; });

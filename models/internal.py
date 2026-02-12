@@ -32,6 +32,7 @@ class ArticleContent(BaseModel):
     title: str
     text: str
     content_length_chars: int
+    published_date: Optional[str] = None
 
 
 class ArticleSearchEntry(BaseModel):
