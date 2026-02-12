@@ -55,6 +55,7 @@ async def _step1_person_youtube(
     queries = [
         f'{name} {company} interview',
         f'{name} {company} podcast',
+        f'{name} {company}',
         f'{name} keynote',
         f'{company} CEO interview',
     ]

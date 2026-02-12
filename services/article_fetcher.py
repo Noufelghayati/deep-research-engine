@@ -24,11 +24,14 @@ _HEADERS = {
 
 _SKIP_DOMAINS = [
     "google.com", "youtube.com", "facebook.com",
-    "twitter.com", "x.com", "instagram.com", "linkedin.com",
+    "twitter.com", "x.com", "instagram.com",
     "reddit.com", "tiktok.com", "pinterest.com",
     "wikipedia.org",
     "duckduckgo.com", "brave.com",
 ]
+
+# LinkedIn is conditionally allowed for person-specific searches
+_LINKEDIN_DOMAIN = "linkedin.com"
 
 
 def _normalize(text: str) -> str:
@@ -114,9 +117,15 @@ async def fetch_article(url: str) -> Optional[ArticleContent]:
         return None
 
 
-def _is_blocked_domain(url: str) -> Optional[str]:
+def _is_blocked_domain(url: str, allow_linkedin: bool = False) -> Optional[str]:
     """Return the blocked domain name if URL matches, else None."""
-    return next((d for d in _SKIP_DOMAINS if d in url), None)
+    blocked = next((d for d in _SKIP_DOMAINS if d in url), None)
+    if blocked:
+        return blocked
+    # LinkedIn is blocked by default, allowed for person-specific queries
+    if _LINKEDIN_DOMAIN in url and not allow_linkedin:
+        return _LINKEDIN_DOMAIN
+    return None
 
 
 def _is_article_too_old(url: str, title: str, max_age_months: int = 12) -> Optional[int]:
@@ -146,6 +155,7 @@ def _is_article_too_old(url: str, title: str, max_age_months: int = 12) -> Optio
 
 async def _search_brave(
     query: str, search_log: List[ArticleSearchEntry],
+    allow_linkedin: bool = False,
 ) -> List[str]:
     """Search Brave for article URLs (scraping fallback)."""
     search_url = f"https://search.brave.com/search?q={quote_plus(query)}"
@@ -172,7 +182,7 @@ async def _search_brave(
             if not href or "brave.com" in href or "search.brave" in href:
                 continue
 
-            blocked = _is_blocked_domain(href)
+            blocked = _is_blocked_domain(href, allow_linkedin=allow_linkedin)
             if blocked:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=href,
@@ -197,6 +207,7 @@ async def _search_brave(
 
 async def _search_duckduckgo(
     query: str, search_log: List[ArticleSearchEntry],
+    allow_linkedin: bool = False,
 ) -> List[str]:
     """Fallback: search DuckDuckGo HTML lite for URLs."""
     search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
@@ -230,7 +241,7 @@ async def _search_duckduckgo(
             else:
                 continue
 
-            blocked = _is_blocked_domain(actual_url)
+            blocked = _is_blocked_domain(actual_url, allow_linkedin=allow_linkedin)
             if blocked:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=actual_url,
@@ -255,6 +266,7 @@ async def _search_duckduckgo(
 
 async def _search_serper(
     query: str, search_log: List[ArticleSearchEntry],
+    allow_linkedin: bool = False,
 ) -> List[str]:
     """Search using Serper.dev API (Google results)."""
     if not settings.serper_api_key:
@@ -303,7 +315,7 @@ async def _search_serper(
             if not href:
                 continue
 
-            blocked = _is_blocked_domain(href)
+            blocked = _is_blocked_domain(href, allow_linkedin=allow_linkedin)
             if blocked:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=href,
@@ -330,22 +342,23 @@ async def _search_serper(
 
 async def _web_search(
     query: str, search_log: List[ArticleSearchEntry],
+    allow_linkedin: bool = False,
 ) -> Tuple[List[str], str]:
     """Search using Serper.dev (primary) -> Brave -> DDG (last fallback).
     Returns (urls, source_engine)."""
-    urls = await _search_serper(query, search_log)
+    urls = await _search_serper(query, search_log, allow_linkedin=allow_linkedin)
     if urls:
         return urls, "serper"
 
     logger.info(f"Serper returned 0 results for '{query[:40]}', trying Brave")
 
-    urls = await _search_brave(query, search_log)
+    urls = await _search_brave(query, search_log, allow_linkedin=allow_linkedin)
     if urls:
         return urls, "brave"
 
     logger.info(f"Brave returned 0 results for '{query[:40]}', trying DDG")
 
-    urls = await _search_duckduckgo(query, search_log)
+    urls = await _search_duckduckgo(query, search_log, allow_linkedin=allow_linkedin)
     return urls, "duckduckgo"
 
 
@@ -366,26 +379,40 @@ async def search_and_fetch_articles(
     current_year = datetime.date.today().year
     year_range = f"{current_year - 1} OR {current_year}"
 
-    queries = []
+    # Person-first query ordering: person queries first, company queries last
+    # LinkedIn is allowed for person-specific queries only
+    person_queries = []
     if person_name:
-        queries.append(f'{person_name} {company_name}')
-    queries.extend([
+        person_queries = [
+            f'{person_name} {company_name}',
+            f'{person_name} {company_name} interview OR podcast OR panel',
+            f'{person_name} {company_name} conference OR keynote OR quote',
+        ]
+
+    company_queries = [
         f'{company_name} partnership',
         f'{company_name} funding',
         f'{company_name} expansion',
         f'{company_name} {year_range}',
-    ])
+    ]
+
+    # Build query list with metadata: (query, allow_linkedin)
+    queries_with_meta = []
+    for q in person_queries:
+        queries_with_meta.append((q, True))   # LinkedIn allowed for person queries
+    for q in company_queries:
+        queries_with_meta.append((q, False))   # LinkedIn blocked for company queries
 
     max_urls_per_query = 4
 
-    for i, query in enumerate(queries):
+    for i, (query, allow_linkedin) in enumerate(queries_with_meta):
         if len(accepted) >= max_articles:
             break
 
         if i > 0:
             await asyncio.sleep(1.5)
 
-        candidate_urls, source = await _web_search(query, search_log)
+        candidate_urls, source = await _web_search(query, search_log, allow_linkedin=allow_linkedin)
         logger.info(
             f"Article search '{query[:50]}' returned {len(candidate_urls)} candidate URLs via {source}"
         )
@@ -443,11 +470,16 @@ async def search_and_fetch_articles(
                 tried += 1
                 continue
 
-            if not _article_mentions_company(article.text, company_name):
+            # Accept article if it mentions the company OR the person (for LinkedIn etc.)
+            mentions_company = _article_mentions_company(article.text, company_name)
+            mentions_person = (
+                person_name and person_name.lower() in article.text.lower()
+            )
+            if not mentions_company and not mentions_person:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=url,
                     status="rejected_no_company_mention",
-                    reason=f"Article text does not mention '{company_name}'",
+                    reason=f"Article text mentions neither '{company_name}' nor '{person_name or ''}'",
                     source=source,
                 ))
                 tried += 1
