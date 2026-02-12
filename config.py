@@ -17,10 +17,11 @@ class Settings(BaseSettings):
     # Decision tree thresholds
     disambiguation_threshold: float = 0.3
     weak_result_threshold: float = 0.5
-    max_youtube_artifacts: int = 2
-    max_article_artifacts: int = 1
+    max_youtube_artifacts: int = 4
+    max_article_artifacts: int = 4
     max_transcript_chars: int = 30000
-    max_transcription_duration_sec: int = 1200  # 20 min cap for audio transcription
+    max_transcription_duration_sec: int = 1500  # 25 min cap per video
+    pipeline_timeout_sec: int = 45  # target <45s total response time
     youtube_search_max_results: int = 5
 
     # Gemini settings

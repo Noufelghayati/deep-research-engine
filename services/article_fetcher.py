@@ -49,6 +49,21 @@ def _article_mentions_company(text: str, company_name: str) -> bool:
     return False
 
 
+def _titles_overlap(title_a: str, title_b: str) -> bool:
+    """Simple topic dedup: check if two article titles share significant words."""
+    words_a = set(_normalize(title_a).split())
+    words_b = set(_normalize(title_b).split())
+    # Remove very common words
+    stop = {"the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "is", "are", "was", "with", "by", "from"}
+    words_a -= stop
+    words_b -= stop
+    if not words_a or not words_b:
+        return False
+    overlap = words_a & words_b
+    smaller = min(len(words_a), len(words_b))
+    return smaller > 0 and len(overlap) / smaller >= 0.6
+
+
 async def fetch_article(url: str) -> Optional[ArticleContent]:
     """Fetch and extract main text from a web article URL."""
     try:
@@ -104,18 +119,19 @@ def _is_blocked_domain(url: str) -> Optional[str]:
     return next((d for d in _SKIP_DOMAINS if d in url), None)
 
 
-def _is_article_too_old(url: str, title: str, max_age_years: int = 2) -> Optional[int]:
+def _is_article_too_old(url: str, title: str, max_age_months: int = 12) -> Optional[int]:
     """
-    Check if article is older than max_age_years based on URL path or title.
+    Check if article is older than max_age_months based on URL path or title.
     Returns the detected year if too old, else None.
     """
-    cutoff_year = datetime.date.today().year - max_age_years
+    today = datetime.date.today()
+    cutoff_year = today.year - 1  # ~12 months
 
     # Check URL for year patterns like /2020/ or /2020-10/
     year_in_url = re.search(r"/(\d{4})/", url)
     if year_in_url:
         year = int(year_in_url.group(1))
-        if 2000 <= year <= datetime.date.today().year and year < cutoff_year:
+        if 2000 <= year <= today.year and year < cutoff_year:
             return year
 
     # Check title for year mentions like "October 2020" or "| 2020"
@@ -151,7 +167,6 @@ async def _search_brave(
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Brave result links are in <a> tags with href starting with http
         for link in soup.select('a[href^="http"]'):
             href = link.get("href", "")
             if not href or "brave.com" in href or "search.brave" in href:
@@ -334,32 +349,41 @@ async def _web_search(
     return urls, "duckduckgo"
 
 
-async def search_and_fetch_article(
+async def search_and_fetch_articles(
     company_name: str,
     person_name: Optional[str] = None,
-) -> tuple[Optional[ArticleContent], List[ArticleSearchEntry]]:
+    max_articles: int = 4,
+) -> Tuple[List[ArticleContent], List[ArticleSearchEntry]]:
     """
-    Search for a relevant article, validate it mentions the company,
-    and return (article, search_log).
-    Uses Brave (primary) -> DDG -> Serper.dev (last fallback).
+    Search for relevant articles, validate they mention the company,
+    and return up to max_articles with topic deduplication.
+    Returns (articles, search_log).
     """
     search_log: List[ArticleSearchEntry] = []
+    accepted: List[ArticleContent] = []
+    seen_urls: set = set()
+
+    current_year = datetime.date.today().year
+    year_range = f"{current_year - 1} OR {current_year}"
 
     queries = []
     if person_name:
-        queries.append(f'{person_name} {company_name} interview')
+        queries.append(f'{person_name} {company_name}')
     queries.extend([
-        f'{company_name} CEO interview',
-        f'{company_name} leadership strategy',
-        f'{company_name} company news',
+        f'{company_name} partnership',
+        f'{company_name} funding',
+        f'{company_name} expansion',
+        f'{company_name} {year_range}',
     ])
 
-    max_urls_per_query = 3
+    max_urls_per_query = 4
 
     for i, query in enumerate(queries):
-        # Delay between searches to avoid rate-limiting
+        if len(accepted) >= max_articles:
+            break
+
         if i > 0:
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(1.5)
 
         candidate_urls, source = await _web_search(query, search_log)
         logger.info(
@@ -377,19 +401,24 @@ async def search_and_fetch_article(
 
         tried = 0
         for url in candidate_urls:
+            if len(accepted) >= max_articles:
+                break
             if tried >= max_urls_per_query:
                 break
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
 
-            # Pre-fetch date check: reject obviously old articles by URL pattern
+            # Pre-fetch date check
             old_year = _is_article_too_old(url, "")
             if old_year:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=url,
                     status="rejected_too_old",
-                    reason=f"URL indicates article is from {old_year} (older than 2 years)",
+                    reason=f"URL indicates article is from {old_year} (older than 12 months)",
                     source=source,
                 ))
-                continue  # Don't count against tried — skip for free
+                continue
 
             article = await fetch_article(url)
             if not article:
@@ -402,13 +431,13 @@ async def search_and_fetch_article(
                 tried += 1
                 continue
 
-            # Post-fetch date check: reject by article title
+            # Post-fetch date check
             old_year = _is_article_too_old(url, article.title)
             if old_year:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=url,
                     status="rejected_too_old",
-                    reason=f"Article '{article.title[:60]}' is from {old_year} (older than 2 years)",
+                    reason=f"Article '{article.title[:60]}' is from {old_year} (older than 12 months)",
                     source=source,
                 ))
                 tried += 1
@@ -424,14 +453,30 @@ async def search_and_fetch_article(
                 tried += 1
                 continue
 
+            # Topic dedup: skip if title overlaps significantly with an already-accepted article
+            is_dup = False
+            for existing in accepted:
+                if _titles_overlap(article.title, existing.title):
+                    search_log.append(ArticleSearchEntry(
+                        query=query, url=url,
+                        status="rejected_duplicate_topic",
+                        reason=f"Topic overlaps with already-accepted '{existing.title[:50]}'",
+                        source=source,
+                    ))
+                    is_dup = True
+                    break
+            if is_dup:
+                tried += 1
+                continue
+
             search_log.append(ArticleSearchEntry(
                 query=query, url=url,
                 status="accepted",
                 reason=f"Article mentions '{company_name}' — {article.content_length_chars} chars extracted",
                 source=source,
             ))
-            logger.info(f"Article accepted: {url} (via {source})")
-            return article, search_log
+            logger.info(f"Article accepted ({len(accepted)+1}/{max_articles}): {url} (via {source})")
+            accepted.append(article)
 
-    logger.info(f"No valid articles found for {company_name}")
-    return None, search_log
+    logger.info(f"Article search complete: {len(accepted)} articles accepted for {company_name}")
+    return accepted, search_log

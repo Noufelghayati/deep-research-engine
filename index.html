@@ -56,6 +56,21 @@
     }
     .person-name { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
     .person-title-co { font-size: 14px; color: #8b949e; margin-top: 4px; }
+    .person-prior { font-size: 13px; color: #58a6ff; margin-top: 4px; }
+
+    /* Tabs */
+    .view-tabs {
+      display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #21262d;
+    }
+    .view-tab {
+      padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer;
+      color: #8b949e; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color 0.2s, border-color 0.2s; user-select: none;
+    }
+    .view-tab:hover { color: #c9d1d9; }
+    .view-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
 
     /* Signal cards */
     .signals-container { margin-bottom: 20px; }
@@ -115,6 +130,64 @@
     }
     .warning-banner.active { display: block; }
 
+    /* Dossier sections */
+    .dossier-section {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 20px 24px; margin-bottom: 16px;
+    }
+    .dossier-section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: #8b949e; margin-bottom: 14px; padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+    .dossier-bullet {
+      font-size: 14px; line-height: 1.7; color: #c9d1d9;
+      padding: 3px 0 3px 16px; position: relative;
+    }
+    .dossier-bullet::before {
+      content: '\2022'; position: absolute; left: 0; color: #484f58;
+    }
+
+    /* Strategic focus theme */
+    .theme-block { margin-bottom: 16px; }
+    .theme-block:last-child { margin-bottom: 0; }
+    .theme-title {
+      font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #e1e4e8; margin-bottom: 8px;
+    }
+    .theme-title .theme-icon { margin-right: 6px; }
+    .theme-bullet {
+      font-size: 14px; line-height: 1.7; color: #c9d1d9;
+      padding: 2px 0 2px 16px; position: relative;
+    }
+    .theme-bullet::before {
+      content: '\2022'; position: absolute; left: 0; color: #484f58;
+    }
+
+    /* Quotes */
+    .dossier-quote-block { margin-bottom: 14px; }
+    .dossier-quote-block:last-child { margin-bottom: 0; }
+    .dossier-quote-topic { font-size: 12px; font-weight: 600; color: #8b949e; margin-bottom: 4px; }
+    .dossier-quote-text {
+      font-size: 14px; color: #c9d1d9; font-style: italic; line-height: 1.6;
+      padding-left: 12px; border-left: 3px solid #30363d; margin-bottom: 4px;
+    }
+    .dossier-quote-text::before { content: '\201C'; font-size: 16px; color: #484f58; }
+    .dossier-quote-text::after { content: '\201D'; font-size: 16px; color: #484f58; }
+    .dossier-quote-source { font-size: 12px; color: #8b949e; padding-left: 12px; }
+
+    /* Source appendix */
+    .source-group-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: #8b949e; margin-top: 12px; margin-bottom: 8px;
+    }
+    .source-group-title:first-child { margin-top: 0; }
+    .source-item {
+      font-size: 13px; color: #c9d1d9; line-height: 1.7; padding: 2px 0;
+    }
+    .source-item a { color: #58a6ff; text-decoration: none; }
+    .source-item a:hover { text-decoration: underline; }
+
     /* Error */
     .error-box { background: #f8514915; border: 1px solid #f8514944; border-radius: 8px; padding: 16px; color: #f85149; font-size: 14px; margin-top: 16px; display: none; }
     .error-box.active { display: block; }
@@ -123,7 +196,7 @@
 <body>
   <div class="container">
     <h1>Deep Research Engine</h1>
-    <p class="subtitle">Sales prep powered by YouTube research + Gemini synthesis</p>
+    <p class="subtitle">Executive intelligence powered by multi-source research + Gemini synthesis</p>
 
     <!-- Transcription Test (hidden) -->
     <div class="form-card" style="border-color:#d29922;display:none;" id="transcriptionTestCard">
@@ -198,14 +271,43 @@
     </div>
 
     <div class="results" id="results">
+      <!-- Warnings -->
       <div class="warning-banner" id="warningBanner"></div>
+
+      <!-- Person header -->
       <div class="person-header" id="personHeader"></div>
-      <div class="signals-container" id="signalsContainer"></div>
+
+      <!-- Tabs -->
+      <div class="view-tabs">
+        <div class="view-tab active" onclick="switchTab('quick')" id="tabQuick">Quick Prep</div>
+        <div class="view-tab" onclick="switchTab('dossier')" id="tabDossier">Full Dossier</div>
+      </div>
+
+      <!-- VIEW 1: Quick Prep -->
+      <div class="view-panel active" id="panelQuick">
+        <div class="signals-container" id="signalsContainer"></div>
+      </div>
+
+      <!-- VIEW 2: Full Dossier -->
+      <div class="view-panel" id="panelDossier">
+        <div id="dossierContent"></div>
+      </div>
+
+      <!-- Sources footer (shared) -->
       <div class="sources-footer" id="sourcesFooter"></div>
     </div>
   </div>
 
   <script>
+    /* ── Tab switching ── */
+    function switchTab(tab) {
+      document.getElementById('tabQuick').classList.toggle('active', tab === 'quick');
+      document.getElementById('tabDossier').classList.toggle('active', tab === 'dossier');
+      document.getElementById('panelQuick').classList.toggle('active', tab === 'quick');
+      document.getElementById('panelDossier').classList.toggle('active', tab === 'dossier');
+    }
+
+    /* ── Progress log helpers ── */
     function toggleStepLogs(stepId) {
       const logsDiv = document.getElementById('logs-' + stepId);
       const link = document.getElementById('toggle-' + stepId);
@@ -219,6 +321,7 @@
       }
     }
 
+    /* ── Main research flow ── */
     function runResearch() {
       const company = document.getElementById('target_company').value.trim();
       if (!company) { alert('Target Company is required'); return; }
@@ -352,44 +455,52 @@
       });
     }
 
+    /* ── Render results ── */
     function renderResults(data) {
+      // Reset tab to Quick Prep
+      switchTab('quick');
+
       // Person header
       const personHeader = document.getElementById('personHeader');
       const name = (data.person && data.person.name) || '';
       const title = (data.person && data.person.title) || '';
       const company = (data.person && data.person.company) || '';
+      const priorRole = (data.person && data.person.prior_role) || '';
       const titleLine = [title, company].filter(Boolean).join(', ');
+
+      let headerHtml = '';
       if (name) {
-        personHeader.innerHTML =
-          '<div class="person-name">' + escHtml(name) + '</div>' +
-          (titleLine ? '<div class="person-title-co">' + escHtml(titleLine) + '</div>' : '');
-        personHeader.style.display = '';
+        headerHtml += '<div class="person-name">' + escHtml(name) + '</div>';
+        if (titleLine) headerHtml += '<div class="person-title-co">' + escHtml(titleLine) + '</div>';
+        if (priorRole) headerHtml += '<div class="person-prior">Previously: ' + escHtml(priorRole) + '</div>';
       } else if (company) {
-        personHeader.innerHTML =
-          '<div class="person-name">' + escHtml(company) + '</div>';
-        personHeader.style.display = '';
+        headerHtml += '<div class="person-name">' + escHtml(company) + '</div>';
+      }
+      personHeader.innerHTML = headerHtml;
+      personHeader.style.display = headerHtml ? '' : 'none';
+
+      // Warnings
+      const warningBanner = document.getElementById('warningBanner');
+      const warnings = data.warnings || [];
+      const signals = data.signals || [];
+      const allWarnings = [...warnings];
+      if (signals.length > 0 && signals.length < 3) {
+        allWarnings.push('Limited research \u2014 found only ' + signals.length + ' signal' + (signals.length === 1 ? '' : 's') + '.');
+      } else if (signals.length === 0) {
+        allWarnings.push('No signals found \u2014 limited public information available for this target.');
+      }
+      if (allWarnings.length > 0) {
+        warningBanner.innerHTML = allWarnings.map(w => '\u26A0\uFE0F ' + escHtml(w)).join('<br>');
+        warningBanner.classList.add('active');
       } else {
-        personHeader.style.display = 'none';
+        warningBanner.classList.remove('active');
       }
 
-      // Signals
+      // ── VIEW 1: Quick Prep signals ──
       const container = document.getElementById('signalsContainer');
       container.innerHTML = '';
-      const signals = data.signals || [];
 
-      // Warning if < 3 signals
-      const warning = document.getElementById('warningBanner');
-      if (signals.length > 0 && signals.length < 3) {
-        warning.textContent = 'Limited research \u2014 found only ' + signals.length + ' signal' + (signals.length === 1 ? '' : 's') + '.';
-        warning.classList.add('active');
-      } else if (signals.length === 0) {
-        warning.textContent = 'No signals found \u2014 limited public information available for this target.';
-        warning.classList.add('active');
-      } else {
-        warning.classList.remove('active');
-      }
-
-      signals.forEach((sig, idx) => {
+      signals.forEach(function(sig) {
         const card = document.createElement('div');
         card.className = 'signal-card';
         card.id = 'signal-' + sig.id;
@@ -423,6 +534,9 @@
         container.appendChild(card);
       });
 
+      // ── VIEW 2: Full Dossier ──
+      renderDossier(data.dossier || null);
+
       // Sources footer
       const footer = document.getElementById('sourcesFooter');
       const sa = data.sources_analyzed || {};
@@ -432,27 +546,132 @@
       if (vCount) parts.push(vCount + ' video' + (vCount !== 1 ? 's' : ''));
       if (aCount) parts.push(aCount + ' article' + (aCount !== 1 ? 's' : ''));
       footer.innerHTML = 'Sources analyzed: ' + (parts.length ? parts.join(', ') : 'none');
+
+      // Show/hide dossier tab
+      document.getElementById('tabDossier').style.display = data.dossier ? '' : 'none';
     }
 
+    /* ── Render Full Dossier ── */
+    function renderDossier(dossier) {
+      const el = document.getElementById('dossierContent');
+      if (!dossier) {
+        el.innerHTML = '<div style="color:#8b949e;font-size:14px;padding:20px;">Dossier not available.</div>';
+        return;
+      }
+
+      let html = '';
+
+      // Section 1: Background
+      const bg = (dossier.background && dossier.background.bullets) || [];
+      if (bg.length > 0) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Identity &amp; Background</div>';
+        bg.forEach(function(b) {
+          html += '<div class="dossier-bullet">' + escHtml(b) + '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Section 2: Strategic Focus
+      const themes = (dossier.strategic_focus && dossier.strategic_focus.themes) || [];
+      if (themes.length > 0) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Current Strategic Focus</div>';
+        themes.forEach(function(t) {
+          html += '<div class="theme-block">';
+          html += '<div class="theme-title"><span class="theme-icon">' + (t.icon || '') + '</span>' + escHtml(t.title || '') + '</div>';
+          (t.bullets || []).forEach(function(b) {
+            html += '<div class="theme-bullet">' + escHtml(b) + '</div>';
+          });
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Section 3: Quotes
+      const quotes = dossier.quotes || [];
+      if (quotes.length > 0) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Stated Perspectives &amp; Quotes</div>';
+        quotes.forEach(function(q) {
+          html += '<div class="dossier-quote-block">';
+          html += '<div class="dossier-quote-topic">' + escHtml(q.topic || '') + '</div>';
+          html += '<div class="dossier-quote-text">' + escHtml(q.quote || '') + '</div>';
+          html += '<div class="dossier-quote-source">' + escHtml(q.source || '') + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Section 4: Momentum
+      const momentum = (dossier.momentum && dossier.momentum.bullets) || [];
+      if (momentum.length > 0) {
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Recent Company Momentum</div>';
+        momentum.forEach(function(b) {
+          html += '<div class="dossier-bullet">' + escHtml(b) + '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Section 5: Source Appendix
+      const sources = dossier.sources || [];
+      if (sources.length > 0) {
+        const primary = sources.filter(function(s) { return s.type === 'primary'; });
+        const supporting = sources.filter(function(s) { return s.type !== 'primary'; });
+
+        html += '<div class="dossier-section">';
+        html += '<div class="dossier-section-title">Sources</div>';
+
+        if (primary.length > 0) {
+          html += '<div class="source-group-title">\uD83C\uDFAF Primary (Direct Interviews)</div>';
+          primary.forEach(function(s) {
+            html += '<div class="source-item">' + (s.icon || '') + ' ' + escHtml(s.title || '');
+            if (s.platform) html += ' - ' + escHtml(s.platform);
+            if (s.date) html += ' - ' + escHtml(s.date);
+            if (s.duration) html += ' (' + escHtml(s.duration) + ')';
+            if (s.url) html += '<br><a href="' + escAttr(s.url) + '" target="_blank">' + escHtml(s.url) + '</a>';
+            html += '</div>';
+          });
+        }
+
+        if (supporting.length > 0) {
+          html += '<div class="source-group-title">\uD83D\uDCC4 Supporting (Company/Press)</div>';
+          supporting.forEach(function(s) {
+            html += '<div class="source-item">' + (s.icon || '') + ' ' + escHtml(s.title || '');
+            if (s.platform) html += ' - ' + escHtml(s.platform);
+            if (s.date) html += ' - ' + escHtml(s.date);
+            if (s.duration) html += ' (' + escHtml(s.duration) + ')';
+            if (s.url) html += '<br><a href="' + escAttr(s.url) + '" target="_blank">' + escHtml(s.url) + '</a>';
+            html += '</div>';
+          });
+        }
+
+        html += '</div>';
+      }
+
+      el.innerHTML = html;
+    }
+
+    /* ── Signal accordion ── */
     function toggleSignal(signalId) {
       const card = document.getElementById('signal-' + signalId);
       if (!card) return;
       const wasExpanded = card.classList.contains('expanded');
-      // Collapse all
-      document.querySelectorAll('.signal-card.expanded').forEach(c => c.classList.remove('expanded'));
-      // Expand clicked (if it wasn't already open)
+      document.querySelectorAll('.signal-card.expanded').forEach(function(c) { c.classList.remove('expanded'); });
       if (!wasExpanded) card.classList.add('expanded');
     }
 
+    /* ── Helpers ── */
     function tsToSec(ts) {
       if (!ts) return 0;
-      const parts = ts.split(':');
+      var parts = ts.split(':');
       if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
       return 0;
     }
 
     function escHtml(s) {
-      const d = document.createElement('div');
+      var d = document.createElement('div');
       d.textContent = s;
       return d.innerHTML;
     }
@@ -461,23 +680,23 @@
       return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    // Allow Enter key on company field to submit
-    document.getElementById('target_company').addEventListener('keydown', e => {
+    // Enter key on company field
+    document.getElementById('target_company').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') runResearch();
     });
 
     // --- Transcription test (real-time SSE progress) ---
     function testTranscribe() {
-      const url = document.getElementById('testYtUrl').value.trim();
+      var url = document.getElementById('testYtUrl').value.trim();
       if (!url) { alert('Enter a YouTube URL'); return; }
 
-      const btn = document.getElementById('testBtn');
-      const loading = document.getElementById('testLoading');
-      const result = document.getElementById('testResult');
-      const errorBox = document.getElementById('testError');
-      const bar = document.getElementById('testProgressBar');
-      const pct = document.getElementById('testPercent');
-      const stage = document.getElementById('testStage');
+      var btn = document.getElementById('testBtn');
+      var loading = document.getElementById('testLoading');
+      var result = document.getElementById('testResult');
+      var errorBox = document.getElementById('testError');
+      var bar = document.getElementById('testProgressBar');
+      var pct = document.getElementById('testPercent');
+      var stage = document.getElementById('testStage');
 
       btn.disabled = true;
       loading.classList.add('active');
@@ -487,22 +706,22 @@
       pct.textContent = '0%';
       stage.textContent = 'Connecting...';
 
-      const sseUrl = `/api/v1/test-transcribe-stream?youtube_url=${encodeURIComponent(url)}`;
-      const evtSource = new EventSource(sseUrl);
+      var sseUrl = '/api/v1/test-transcribe-stream?youtube_url=' + encodeURIComponent(url);
+      var evtSource = new EventSource(sseUrl);
 
       evtSource.onmessage = function(event) {
-        const data = JSON.parse(event.data);
+        var data = JSON.parse(event.data);
 
         if (data.stage === 'result') {
           evtSource.close();
           document.getElementById('testMeta').textContent =
-            `Video: ${data.video_id} | Available: ${data.transcript_available} | ` +
-            `Length: ${data.transcript_length.toLocaleString()} chars | Time: ${data.elapsed_seconds}s`;
+            'Video: ' + data.video_id + ' | Available: ' + data.transcript_available + ' | ' +
+            'Length: ' + data.transcript_length.toLocaleString() + ' chars | Time: ' + data.elapsed_seconds + 's';
           document.getElementById('testText').textContent =
             data.transcript || '(no transcript)';
           result.style.display = 'block';
           btn.disabled = false;
-          setTimeout(() => loading.classList.remove('active'), 500);
+          setTimeout(function() { loading.classList.remove('active'); }, 500);
           return;
         }
 
@@ -533,7 +752,7 @@
       };
     }
 
-    document.getElementById('testYtUrl').addEventListener('keydown', e => {
+    document.getElementById('testYtUrl').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') testTranscribe();
     });
   </script>

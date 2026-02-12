@@ -1,3 +1,4 @@
+import time
 from typing import List
 from models.requests import ResearchRequest
 from models.internal import CollectedArtifacts, ScoredVideo
@@ -5,7 +6,7 @@ from models.responses import ResearchResponse
 from services.youtube_search import search_youtube
 from services.youtube_transcript import fetch_transcript
 from services.disambiguation import score_and_filter
-from services.article_fetcher import search_and_fetch_article
+from services.article_fetcher import search_and_fetch_articles
 from services.synthesis import synthesize
 from config import settings
 import asyncio
@@ -49,10 +50,13 @@ async def _step1_person_youtube(
     logger.info(f"Step 1: Person-level YouTube for '{request.target_name}'")
     artifacts.steps_attempted.append("step1_person_youtube")
 
+    name = request.target_name
+    company = request.target_company
     queries = [
-        f'{request.target_name} {request.target_company} company interview',
-        f'{request.target_name} {request.target_company} company podcast',
-        f'{request.target_name} {request.target_company} company keynote',
+        f'{name} {company} interview',
+        f'{name} {company} podcast',
+        f'{name} keynote',
+        f'{company} CEO interview',
     ]
 
     all_candidates = []
@@ -60,7 +64,7 @@ async def _step1_person_youtube(
 
     for i, query in enumerate(queries):
         if i > 0:
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(1.5)
         candidates = await search_youtube(
             query, max_results=settings.youtube_search_max_results
         )
@@ -80,7 +84,7 @@ async def _step1_person_youtube(
         all_candidates,
         request.target_name,
         request.target_company,
-        max_keep=2,
+        max_keep=settings.max_youtube_artifacts,
     )
 
     if emit:
@@ -91,7 +95,7 @@ async def _step1_person_youtube(
             await emit("log", step="step1", message=f"{status} \"{sv.title[:70]}\" = {sv.match_score} [{signals}]")
         await emit("log", step="step1", message=f"Kept {len(step1_videos)} of {len(all_scored)} candidates (threshold \u2265 {settings.disambiguation_threshold})")
 
-    # Ensure transcripts are fetched for accepted videos
+    # Fetch transcripts for accepted videos
     for video in step1_videos:
         if not video.transcript_text and not video.transcript_available:
             if emit:
@@ -119,7 +123,7 @@ async def _step2_company_leadership(
 ) -> None:
     """
     Step 2: Company leadership YouTube fallback.
-    Searches for CEO, CRO, CFO, CTO, COO, CMO, CIO, CSO, CHRO interviews.
+    Fills remaining video slots with company-level leadership content.
     """
     remaining_slots = settings.max_youtube_artifacts - len(artifacts.videos)
     if remaining_slots <= 0:
@@ -133,20 +137,19 @@ async def _step2_company_leadership(
 
     company = request.target_company
     queries = [
-        f'{company} company CEO interview',
-        f'{company} company founder interview',
-        f'{company} company CFO interview',
-        f'{company} company CRO interview',
-        f'{company} company CTO interview',
-        f'{company} company COO interview',
-        f'{company} company CMO interview',
-        f'{company} company leadership panel',
-        f'{company} company conference talk',
+        f'{company} CEO interview',
+        f'{company} founder interview',
+        f'{company} CFO interview',
+        f'{company} CRO interview',
+        f'{company} CTO interview',
+        f'{company} COO interview',
+        f'{company} leadership panel',
+        f'{company} conference talk',
     ]
 
     for i, query in enumerate(queries):
         if i > 0:
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(1.5)
         candidates = await search_youtube(query, max_results=5)
         new_count = 0
         for c in candidates:
@@ -191,35 +194,21 @@ async def _step2_company_leadership(
     logger.info(f"Step 2 result: {len(step2_videos)} additional videos")
 
 
-async def _step3_article_supplement(
+async def _step3_articles(
     request: ResearchRequest,
     artifacts: CollectedArtifacts,
     emit=None,
 ) -> None:
     """
-    Step 3: Article fallback/supplement.
-    Used when YouTube content is thin or absent.
+    Step 3: Article search — always runs, collects up to max_article_artifacts.
     """
-    combined_strength = _compute_result_strength(artifacts.videos)
-    total_artifacts = len(artifacts.videos) + len(artifacts.articles)
-    max_total = settings.max_youtube_artifacts + settings.max_article_artifacts
+    logger.info("Step 3: Article search")
+    artifacts.steps_attempted.append("step3_articles")
 
-    needs_article = (
-        total_artifacts < max_total
-        and (combined_strength < 0.7 or len(artifacts.videos) == 0)
-    )
-
-    if not needs_article:
-        if emit:
-            await emit("log", step="step3", message=f"Skipped: strength={combined_strength:.2f}, artifacts={total_artifacts}/{max_total}")
-        return
-
-    logger.info("Step 3: Article supplement")
-    artifacts.steps_attempted.append("step3_article_fallback")
-
-    article, article_log = await search_and_fetch_article(
+    articles, article_log = await search_and_fetch_articles(
         request.target_company,
         request.target_name,
+        max_articles=settings.max_article_artifacts,
     )
 
     if emit:
@@ -232,25 +221,25 @@ async def _step3_article_supplement(
                 "no_results": "\u2014",
                 "search_error": "!",
                 "rejected_too_old": "\u2717",
+                "rejected_duplicate_topic": "\u2717",
             }.get(entry.status, "?")
             url_part = f" {entry.url[:80]}" if entry.url else ""
             source_part = f" [{entry.source}]" if entry.source else ""
             await emit("log", step="step3", message=f"{status_icon} [{entry.status}]{source_part}{url_part} \u2014 {entry.reason}")
 
     artifacts.article_search_log = article_log
-    if article:
-        artifacts.articles.append(article)
-        logger.info(f"Step 3 result: article found ({article.content_length_chars} chars)")
-    else:
-        logger.info("Step 3 result: no article found")
+    artifacts.articles.extend(articles)
+    logger.info(f"Step 3 result: {len(articles)} article(s) found")
 
 
 async def run_research(request: ResearchRequest, on_progress=None) -> ResearchResponse:
     """
-    Execute the full research decision tree:
-      Step 1 -> Step 2 (if weak) -> Step 3 (if thin) -> Synthesis
-    on_progress: optional async callable(event_type, data_dict)
+    Execute the full research pipeline:
+      Step 1 (person YouTube) -> Step 2 (company fallback) -> Step 3 (articles) -> Synthesis
+    Enforces pipeline_timeout_sec. Tracks boring-VP and common-name edge cases.
     """
+    pipeline_start = time.time()
+
     async def emit(event_type: str, **kwargs):
         if on_progress:
             await on_progress(event_type, kwargs)
@@ -263,57 +252,104 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         person_title=request.target_title,
     )
 
-    # Step 1: Person-level YouTube
-    await emit("step", step="step1", status="searching", message="Searching YouTube for target person videos...")
-    step1_strength = await _step1_person_youtube(request, artifacts, emit=_emit)
+    warnings = []
+    timed_out = False
+
+    def _elapsed():
+        return time.time() - pipeline_start
+
+    def _time_left():
+        return max(0, settings.pipeline_timeout_sec - _elapsed())
+
+    # ── Step 1: Person-level YouTube ──
+    await emit("step", step="step1", status="searching", message="Searching for person videos and podcasts...")
+    try:
+        step1_strength = await asyncio.wait_for(
+            _step1_person_youtube(request, artifacts, emit=_emit),
+            timeout=_time_left(),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Pipeline timeout during step 1 at {_elapsed():.1f}s")
+        step1_strength = 0.0
+        timed_out = True
+        warnings.append("Partial research \u2014 showing available signals")
+
+    person_video_count = len(artifacts.videos)
     for v in artifacts.videos:
         await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
-    await emit("step", step="step1", status="done", message=f"Found {len(artifacts.videos)} person video(s)")
+    await emit("step", step="step1", status="done", message=f"Found {person_video_count} person video(s)")
 
-    # Step 2: Company leadership fallback (if Step 1 weak)
-    if step1_strength < settings.weak_result_threshold:
+    # ── Step 2: Company leadership fallback (if Step 1 weak) ──
+    if not timed_out and step1_strength < settings.weak_result_threshold:
         prev_count = len(artifacts.videos)
         await emit("step", step="step2", status="searching", message="Searching for company leadership videos...")
-        await _step2_company_leadership(request, artifacts, emit=_emit)
+        try:
+            await asyncio.wait_for(
+                _step2_company_leadership(request, artifacts, emit=_emit),
+                timeout=_time_left(),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Pipeline timeout during step 2 at {_elapsed():.1f}s")
+            timed_out = True
+            warnings.append("Partial research \u2014 showing available signals")
         new_videos = artifacts.videos[prev_count:]
         for v in new_videos:
             await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
         await emit("step", step="step2", status="done", message=f"Found {len(new_videos)} leadership video(s)")
 
-    # Fetch transcripts for videos that need them
-    for i, video in enumerate(artifacts.videos):
-        if video.transcript_available:
-            await emit("transcript", video=video.title, status="existing")
-        elif video.transcript_text:
-            await emit("transcript", video=video.title, status="existing")
+    # Detect "boring VP" — no person-level interviews found
+    has_person_content = person_video_count > 0
+    if not has_person_content and request.target_name:
+        warnings.append("No direct interviews found \u2014 signals derived from company-level sources and role context")
+
+    # ── Step 3: Articles (always runs) ──
+    if not timed_out:
+        await emit("step", step="step3", status="searching", message="Searching for articles...")
+        try:
+            await asyncio.wait_for(
+                _step3_articles(request, artifacts, emit=_emit),
+                timeout=_time_left(),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Pipeline timeout during step 3 at {_elapsed():.1f}s")
+            timed_out = True
+            if "Partial research" not in str(warnings):
+                warnings.append("Partial research \u2014 showing available signals")
+
+        for a in artifacts.articles:
+            await emit("found", kind="article", title=a.title)
+        if artifacts.articles:
+            await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
         else:
-            await emit("transcript", video=video.title, status="fetching")
+            await emit("step", step="step3", status="done", message="Using video sources only")
 
-    # Step 3: Article supplement
-    await emit("step", step="step3", status="searching", message="Searching for articles...")
-    await _step3_article_supplement(request, artifacts, emit=_emit)
-    for a in artifacts.articles:
-        await emit("found", kind="article", title=a.title)
-    if artifacts.articles:
-        await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
-    else:
-        await emit("step", step="step3", status="done", message="Using video sources only")
-
-    # Synthesis
-    await emit("step", step="synthesis", status="running", message="Extracting commercial signals...")
+    # ── Synthesis ──
+    await emit("step", step="synthesis", status="running", message="Synthesizing intelligence...")
+    video_count = len(artifacts.videos)
+    article_count = len(artifacts.articles)
+    transcript_count = sum(1 for v in artifacts.videos if v.transcript_available)
     if on_progress:
-        video_count = len(artifacts.videos)
-        article_count = len(artifacts.articles)
-        transcript_count = sum(1 for v in artifacts.videos if v.transcript_available)
         await emit("log", step="synthesis", message=f"Analyzing {video_count} video(s) ({transcript_count} with transcripts) + {article_count} article(s)...")
+
     logger.info(
-        f"Synthesis: {len(artifacts.videos)} videos, "
-        f"{len(artifacts.articles)} articles, "
+        f"Synthesis: {video_count} videos, "
+        f"{article_count} articles, "
         f"steps={artifacts.steps_attempted}"
     )
     artifacts.steps_attempted.append("synthesis")
 
-    response = await synthesize(artifacts, request)
+    response = await synthesize(
+        artifacts,
+        request,
+        has_person_content=has_person_content,
+    )
+
+    # Attach warnings
+    response.warnings = warnings
+
     signal_count = len(response.signals)
     await emit("step", step="synthesis", status="done", message=f"Found {signal_count} signal{'s' if signal_count != 1 else ''}")
+
+    elapsed = round(_elapsed(), 1)
+    logger.info(f"Pipeline completed in {elapsed}s: {signal_count} signals, {video_count} videos, {article_count} articles")
     return response
