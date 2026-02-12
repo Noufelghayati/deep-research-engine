@@ -95,6 +95,9 @@ async def _step1_person_youtube(
             await emit("log", step="step1", message=f"{status} \"{sv.title[:70]}\" = {sv.match_score} [{signals}]")
         await emit("log", step="step1", message=f"Kept {len(step1_videos)} of {len(all_scored)} candidates (threshold \u2265 {settings.disambiguation_threshold})")
 
+    # Add videos to artifacts BEFORE transcript fetch so timeout won't lose them
+    artifacts.videos.extend(step1_videos)
+
     # Fetch transcripts for accepted videos
     for video in step1_videos:
         if not video.transcript_text and not video.transcript_available:
@@ -108,7 +111,6 @@ async def _step1_person_youtube(
             video.transcript_text = text
             video.transcript_available = available
 
-    artifacts.videos.extend(step1_videos)
     strength = _compute_result_strength(step1_videos)
     logger.info(f"Step 1 result: {len(step1_videos)} videos, strength={strength:.2f}")
     if emit:
@@ -178,6 +180,9 @@ async def _step2_company_leadership(
             await emit("log", step="step2", message=f"{status} \"{sv.title[:70]}\" = {sv.match_score} [{signals}]")
         await emit("log", step="step2", message=f"Kept {len(step2_videos)} of {len(all_scored)} candidates (threshold \u2265 {settings.disambiguation_threshold})")
 
+    # Add videos to artifacts BEFORE transcript fetch so timeout won't lose them
+    artifacts.videos.extend(step2_videos)
+
     for video in step2_videos:
         if not video.transcript_text:
             if emit:
@@ -189,8 +194,6 @@ async def _step2_company_leadership(
                 text, available = await fetch_transcript(video.video_id)
             video.transcript_text = text
             video.transcript_available = available
-
-    artifacts.videos.extend(step2_videos)
     logger.info(f"Step 2 result: {len(step2_videos)} additional videos")
 
 
@@ -302,26 +305,24 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     if not has_person_content and request.target_name:
         warnings.append("No direct interviews found \u2014 signals derived from company-level sources and role context")
 
-    # ── Step 3: Articles (always runs) ──
-    if not timed_out:
-        await emit("step", step="step3", status="searching", message="Searching for articles...")
-        try:
-            await asyncio.wait_for(
-                _step3_articles(request, artifacts, emit=_emit),
-                timeout=_time_left(),
-            )
-        except asyncio.TimeoutError:
-            logger.warning(f"Pipeline timeout during step 3 at {_elapsed():.1f}s")
-            timed_out = True
-            if "Partial research" not in str(warnings):
-                warnings.append("Partial research \u2014 showing available signals")
+    # ── Step 3: Articles (always runs, even after timeout — articles are fast) ──
+    await emit("step", step="step3", status="searching", message="Searching for articles...")
+    try:
+        await asyncio.wait_for(
+            _step3_articles(request, artifacts, emit=_emit),
+            timeout=max(_time_left(), 15),  # give articles at least 15s even after timeout
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Pipeline timeout during step 3 at {_elapsed():.1f}s")
+        if "Partial research" not in str(warnings):
+            warnings.append("Partial research \u2014 showing available signals")
 
-        for a in artifacts.articles:
-            await emit("found", kind="article", title=a.title)
-        if artifacts.articles:
-            await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
-        else:
-            await emit("step", step="step3", status="done", message="Using video sources only")
+    for a in artifacts.articles:
+        await emit("found", kind="article", title=a.title)
+    if artifacts.articles:
+        await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
+    else:
+        await emit("step", step="step3", status="done", message="Using video sources only")
 
     # ── Synthesis ──
     await emit("step", step="synthesis", status="running", message="Synthesizing intelligence...")
