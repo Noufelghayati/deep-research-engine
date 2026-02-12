@@ -272,6 +272,42 @@ def _compute_research_confidence(
 
 
 # ═══════════════════════════════════════════════════════════
+#  Person Signal Strength Assessment
+# ═══════════════════════════════════════════════════════════
+
+def _assess_signal_strength(
+    artifacts: CollectedArtifacts,
+    request: ResearchRequest,
+) -> str:
+    """
+    Assess how much direct person-level content we have.
+    Returns: 'strong', 'moderate', or 'low'
+    """
+    if not request.target_name:
+        return "strong"  # Company-only search, no person to assess
+
+    direct_interviews = sum(
+        1 for v in artifacts.videos
+        if v.is_person_match and v.transcript_available
+    )
+    person_match_videos = sum(1 for v in artifacts.videos if v.is_person_match)
+
+    # Check if person is mentioned substantively in articles
+    person_name_lower = request.target_name.lower()
+    person_articles = 0
+    for a in artifacts.articles:
+        if person_name_lower in a.text.lower():
+            person_articles += 1
+
+    if direct_interviews >= 1:
+        return "strong"
+    elif person_match_videos >= 1 or person_articles >= 2:
+        return "moderate"
+    else:
+        return "low"
+
+
+# ═══════════════════════════════════════════════════════════
 #  CALL 1: Quick Prep signals + Executive Orientation
 # ═══════════════════════════════════════════════════════════
 
@@ -284,6 +320,12 @@ def _build_quick_prep_system(request: ResearchRequest, has_person_content: bool)
         "",
         "The bar: An SDR reads this and thinks 'I understand how this person thinks",
         "and where they're vulnerable' — NOT 'I know what this company announced.'",
+        "",
+        "PERSON-FIRST RULE (MANDATORY when target person is specified):",
+        "The individual MUST always be the primary object of analysis.",
+        "Company context exists ONLY to illuminate the PERSON's world.",
+        "Every signal and every orientation line must be ABOUT this person.",
+        "NEVER let company strategy dominate — frame everything through the person's lens.",
         "",
         "SYNTHESIS PROCESS:",
         "1. Extract all signals from ALL sources",
@@ -330,17 +372,23 @@ LINE 3 — ROLE CONTEXT: How long in role? What inflection point? Where placing 
   ✓ "New CEO (8 months) investing in product quality during rapid scaling"
   ✓ "Long-tenured founder (10 years) shifting from growth to profitability"
 
-LINE 4 — VULNERABILITY (MANDATORY, must be specific):
-  ✓ "Vulnerable: Execution risk, retailer ROI pressure, unproven at enterprise scale"
-  ✓ "Vulnerable: Platform stability during 3x growth, accumulating technical debt"
-  ✗ Avoid vague: "market challenges" or "competitive pressure"
+LINE 4 — VULNERABILITY (MANDATORY, must be EVIDENCE-BASED):
+  - ONLY include vulnerabilities supported by evidence from sources
+  - Cite the specific evidence: timelines, role transitions, stated priorities, competitive context
+  - If strong evidence: "Vulnerable: [specific pressure with evidence]"
+  - If limited evidence: "Limited direct signal — role-typical exposures include [role-based pressures]"
+  ✓ "Vulnerable: Execution risk from 25% store growth in 12 months, retailer ROI pressure [VIDEO 1]"
+  ✓ "Vulnerable: Platform stability during 3x growth, accumulating technical debt [ARTICLE 3]"
+  ✗ NEVER speculate on vulnerabilities without evidence from sources
+  ✗ NEVER present company challenges as personal vulnerabilities without connecting to the person
 
 RULES:
 - Base everything on evidence from sources (don't speculate)
 - Be specific (not "focused on growth" but "25% expansion in 12 months")
 - Show tension and trade-offs
 - If evidence is thin: "Limited public signal — appears to be..."
-- For company-only searches (no person): orient around the company's leadership posture""")
+- For company-only searches (no person): orient around the company's leadership posture
+- NEVER fabricate psychology or decision patterns without direct signal""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -433,6 +481,129 @@ If no quality signals found, return {"prior_role": null, "executive_orientation"
 
 
 # ═══════════════════════════════════════════════════════════
+#  CALL 1b: Quick Prep — LOW SIGNAL MODE
+# ═══════════════════════════════════════════════════════════
+
+def _build_quick_prep_system_low_signal(request: ResearchRequest) -> str:
+    """Build Quick Prep prompt for low-signal executives (no direct interviews)."""
+    lines = [
+        "You are an EXECUTIVE INTELLIGENCE engine for B2B sales prep.",
+        "",
+        "CRITICAL CONTEXT: Very limited direct public signal exists for this person.",
+        "There are NO direct interviews, podcast appearances, or keynotes available.",
+        "",
+        "YOUR JOB: Build a useful profile by combining:",
+        "1. Whatever identity/role information exists in sources",
+        "2. Role-based inference (clearly labeled as inferred)",
+        "3. Company context as SUPPORTING evidence (never leading)",
+        "",
+        "ABSOLUTE RULES:",
+        "- The PERSON is always the primary subject, never the company",
+        "- Label all inferences: 'Inferred from role context' or 'Based on company positioning'",
+        "- NEVER fabricate quotes or attribute statements to this person",
+        "- NEVER speculate on psychology, personality, or decision patterns without evidence",
+        "- Be honest about what you don't know",
+        "- Company context supports the person analysis — it does NOT replace it",
+        "",
+        f"TARGET PERSON: {request.target_name}",
+        f"TARGET COMPANY: {request.target_company}",
+    ]
+    if request.target_title:
+        lines.append(f"PERSON TITLE: {request.target_title}")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 1: EXECUTIVE ORIENTATION (4 lines — LOW SIGNAL MODE)
+═══════════════════════════════════════
+
+Generate an honest, role-based Executive Orientation. Each line MUST acknowledge limited signal.
+
+LINE 1 — GROWTH POSTURE (role-inferred):
+  ✓ "Limited direct signal — [title] at [company] during [growth phase] suggests [orientation]"
+  ✗ Don't claim to know their growth philosophy without evidence
+
+LINE 2 — FUNCTIONAL BIAS (role-inferred):
+  ✓ "[Title]-focused operator — role context suggests emphasis on [likely priorities]"
+  ✗ Don't attribute personality traits without direct quotes
+
+LINE 3 — ROLE CONTEXT:
+  ✓ "[What we actually know about their role, tenure, background from sources]"
+  ✓ If limited: "Role details limited to [title] at [company]; tenure and background not publicly confirmed"
+
+LINE 4 — VULNERABILITY:
+  ✓ "Limited direct signal — role-typical exposures include [role-based pressures]"
+  ✗ NEVER: Speculative personal vulnerabilities without evidence
+  ✗ NEVER: Generic corporate challenges presented as personal vulnerability""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 2: EXECUTIVE INTELLIGENCE SIGNALS (LOW SIGNAL MODE)
+═══════════════════════════════════════
+
+With limited person-level content, generate signals that:
+1. LEAD with what we know about the PERSON (even if minimal)
+2. Connect role context to likely operational focus
+3. Use company context to illuminate the person's likely challenges
+4. CLEARLY LABEL what is observed vs inferred
+
+SIGNAL COMPOSITION (5 signals):
+- Signal 1: Identity & role positioning (what we actually know about this person)
+- Signal 2: Likely operational focus based on role + company context (labeled inferred)
+- Signal 3: Market/competitive context THIS PERSON navigates (framed around the person)
+- Signal 4: Role-typical challenges and pressures (labeled inferred)
+- Signal 5: Company momentum that shapes this person's priorities (framed around person)
+
+CRITICAL: Frame EVERY signal around the person, even when using company data.
+  ✓ "As [title], likely navigating [company challenge] — role demands [focus area]"
+  ✗ "[Company] announced [thing]" — this is company news, not person intelligence
+
+SIGNAL CATEGORIES:
+🎯 BACKGROUND — identity, role context, career positioning
+🔧 PRODUCT — likely operational/product focus based on role
+💰 MARKET — market context this person operates in
+🚨 CHALLENGE — role-typical pressures and challenges
+⚖️ TENSION — likely tensions and trade-offs in this role
+
+Each signal: max 25 words.
+For quote field: use a relevant company quote if available, or write:
+  "No direct quote available — inferred from role context"
+For inferred signals, set source type to "article" and use the most relevant company source.""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+OUTPUT FORMAT (JSON object):
+═══════════════════════════════════════
+{
+  "prior_role": null,
+  "executive_orientation": {
+    "growth_posture": "Limited direct signal — ...",
+    "functional_bias": "...",
+    "role_context": "...",
+    "vulnerable": "Limited direct signal — role-typical exposures include ..."
+  },
+  "signals": [
+    {
+      "category": "BACKGROUND",
+      "signal": "[Person]-focused signal text, max 25 words",
+      "quote": "No direct quote available — inferred from role context",
+      "source": {
+        "type": "article",
+        "title": "Source title",
+        "url": "https://...",
+        "timestamp": null,
+        "date": "..."
+      }
+    }
+  ]
+}
+
+Return a JSON object with "prior_role", "executive_orientation", and "signals".
+EVERY signal must be framed around the person, never the company alone.""")
+
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════
 #  CALL 2: Full Dossier
 # ═══════════════════════════════════════════════════════════
 
@@ -442,6 +613,12 @@ def _build_dossier_system(request: ResearchRequest, has_person_content: bool) ->
         "",
         "YOUR TASK: Reveal how this executive THINKS, what pressures they navigate,",
         "and where they're vulnerable. This is EXECUTIVE PSYCHOLOGY, not company news.",
+        "",
+        "PERSON-FIRST RULE (MANDATORY when target person is specified):",
+        "The individual MUST always be the primary object of analysis.",
+        "Company context exists ONLY to illuminate the PERSON's world.",
+        "Every section must be framed through the person's lens.",
+        "NEVER lead with company strategy — lead with the PERSON.",
         "",
         "Analyze ALL sources and produce a structured dossier with 6 sections.",
         "This must be SYNTHESIZED intelligence — cluster themes across sources, not per-source summaries.",
@@ -590,11 +767,13 @@ SECTION RULES:
    - strategic_implication: 5-10 word observational note (e.g. "Suggests openness to scalable infrastructure")
 
    PRESSURE POINTS & VULNERABILITIES (3-4 thematic clusters):
-   Each cluster must:
+   Each cluster MUST be EVIDENCE-BASED:
    - Name the pressure/vulnerability specifically
    - Explain why it matters (stakes, consequences)
-   - Cite evidence from sources
+   - Cite evidence from sources with [VIDEO X] or [ARTICLE X] references
    - Be specific about what could break
+   - NEVER speculate on vulnerabilities without direct evidence
+   - If evidence is thin: label as "Inferred from role context" and explain reasoning
 
    Common themes to consider: Execution Risk, Credibility Window, Commercial Tension,
    Market Position, Technical Debt, Organizational Strain
@@ -602,9 +781,12 @@ SECTION RULES:
    QUALITY BAR:
    ✓ Specific (numbers, timelines, named pressures)
    ✓ Honest (don't sugarcoat vulnerabilities)
-   ✓ Evidence-based (cite sources)
+   ✓ Evidence-based (cite sources for every claim)
+   ✓ Connected to the PERSON (not just company challenges)
    ✗ Generic ("facing market challenges")
    ✗ Safe ("well-positioned for growth")
+   ✗ Speculative psychology without direct quotes or evidence
+   ✗ Company challenges presented as personal vulnerabilities without connecting to the person
 
 3. STRATEGIC FOCUS (3-6 themes):
    - Synthesized across multiple sources using cross-source pattern recognition
@@ -628,6 +810,132 @@ SECTION RULES:
    - type: "primary" (person interviews) or "supporting" (company/press)
    - icon: 📹 for video, 📄 for article
    - Include title, platform, date, duration (video only), url""")
+
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════
+#  CALL 2b: Full Dossier — LOW SIGNAL MODE
+# ═══════════════════════════════════════════════════════════
+
+def _build_dossier_system_low_signal(request: ResearchRequest) -> str:
+    """Build Dossier prompt for low-signal executives (no direct interviews)."""
+    lines = [
+        "You are an EXECUTIVE INTELLIGENCE engine building a research dossier for B2B sales prep.",
+        "",
+        "CRITICAL CONTEXT: Very limited direct public signal exists for this person.",
+        "There are NO direct interviews, podcast appearances, or keynotes indexed.",
+        "",
+        "YOUR APPROACH:",
+        "1. PERSON is always the primary subject — never let company context dominate",
+        "2. Use role/title to infer likely focus areas (clearly labeled)",
+        "3. Include company context ONLY as supporting evidence for the person's world",
+        "4. Be honest about confidence levels throughout",
+        "5. NEVER fabricate quotes or attribute statements to this person",
+        "6. NEVER speculate on personality or psychology without evidence",
+        "",
+        f"TARGET PERSON: {request.target_name}",
+        f"TARGET COMPANY: {request.target_company}",
+    ]
+    if request.target_title:
+        lines.append(f"PERSON TITLE: {request.target_title}")
+
+    lines.append("")
+    lines.append("""OUTPUT FORMAT (JSON object — LOW SIGNAL MODE):
+{
+  "background": [
+    "[Name] serves as [Title] at [Company]",
+    "[Any verified background facts from sources]",
+    "Role context: [What this title typically involves at a company like this]",
+    "Limited public executive content available — analysis primarily role-inferred"
+  ],
+  "executive_profile": {
+    "leadership_orientation": {
+      "growth_stage": "[Company]'s current phase: [what we know] — [person]'s role in this context",
+      "strategic_posture": "Inferred from role: [title] typically focuses on [likely priorities]",
+      "decision_making_bias": "Insufficient direct signal to assess individual decision-making patterns",
+      "strategic_implication": "Role suggests focus on [likely area] — requires validation"
+    },
+    "pressure_points": [
+      {
+        "name": "Role-Typical Pressure",
+        "why_it_matters": "[What someone in this role typically navigates]",
+        "evidence": "Inferred from role context and company positioning"
+      }
+    ]
+  },
+  "strategic_focus": [
+    {
+      "category": "PRODUCT",
+      "title": "LIKELY FOCUS: [Area]",
+      "bullets": [
+        "As [title], likely responsible for [focus area] — [company context supports this]",
+        "[Another role-inferred focus with company evidence]"
+      ],
+      "strategic_implication": "Inferred — requires validation in conversation"
+    }
+  ],
+  "quotes": [],
+  "momentum_grouped": [
+    {
+      "period": "Company Context",
+      "bullets": [
+        "[Recent company developments that shape this person's operating environment]"
+      ]
+    }
+  ],
+  "sources": [...]
+}
+
+═══════════════════════════════════════
+SECTION RULES (LOW SIGNAL MODE):
+═══════════════════════════════════════
+
+1. BACKGROUND (max 6 bullets):
+   - LEAD with person's identity and role — this is about THEM
+   - Include any verified facts from sources (LinkedIn, press mentions, etc.)
+   - Add role context: what this title typically involves at a company like this
+   - Acknowledge signal limitations honestly
+   - NEVER pad with company history as if it's person background
+   - Career arc if available, otherwise: "Background details not publicly confirmed"
+
+2. EXECUTIVE PROFILE:
+
+   LEADERSHIP ORIENTATION:
+   - Frame around the person's role, not the company's strategy
+   - Label inferences clearly: "Inferred from role context"
+   - "Insufficient direct signal" is an acceptable and honest answer
+   - strategic_implication: always note inference needs validation
+
+   PRESSURE POINTS (2-3 role-inferred):
+   - Focus on role-typical pressures, not speculative personal ones
+   - Every point MUST be labeled: "Inferred from role context"
+   - Frame as: what someone in THIS role at THIS company likely navigates
+   - NEVER present company challenges as personal vulnerabilities
+   - NEVER speculate on psychology or decision patterns
+
+3. STRATEGIC FOCUS (3-4 themes):
+   - Title each as "LIKELY FOCUS: [Area]" to signal inference
+   - Frame around the person's role responsibilities
+   - Use company context as supporting evidence, not the headline
+   - strategic_implication: always note "Inferred — requires validation"
+   - MUST use ONLY these category values:
+     GROWTH, MARKET, PRODUCT, CHALLENGE, TRACTION, BACKGROUND, TENSION
+
+4. QUOTES:
+   - Return EMPTY array [] — do not fabricate quotes
+   - Being honest is better than fabricated content
+
+5. MOMENTUM GROUPED:
+   - Use "Company Context" as period label
+   - Include company developments that directly affect this person's role
+   - Frame as: developments shaping the person's operating environment
+   - Second group can be "Market Context" for competitive landscape
+
+6. SOURCES:
+   - List all sources used
+   - Mark ALL as "supporting" (none are "primary" without direct interviews)
+   - icon: 📄 for articles, 📹 for videos""")
 
     return "\n".join(lines)
 
@@ -801,10 +1109,24 @@ async def synthesize(
     source_material = _build_source_material(artifacts)
     loop = asyncio.get_event_loop()
 
-    # Build both prompts upfront
-    quick_system = _build_quick_prep_system(request, has_person_content)
+    # Assess person signal strength for prompt routing
+    signal_strength = _assess_signal_strength(artifacts, request)
+    logger.info(
+        f"Person signal strength: {signal_strength} "
+        f"(has_person_content={has_person_content}, "
+        f"videos={len(artifacts.videos)}, articles={len(artifacts.articles)})"
+    )
+
+    # Build prompts — use low-signal templates when person data is thin
+    if signal_strength == "low" and request.target_name:
+        logger.info("Using LOW-SIGNAL prompt templates (person-first, role-inferred)")
+        quick_system = _build_quick_prep_system_low_signal(request)
+        dossier_system = _build_dossier_system_low_signal(request)
+    else:
+        quick_system = _build_quick_prep_system(request, has_person_content)
+        dossier_system = _build_dossier_system(request, has_person_content)
+
     quick_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
-    dossier_system = _build_dossier_system(request, has_person_content)
     dossier_content = f"Build a full executive intelligence dossier from these sources:\n\n{source_material}"
 
     # ── Run both Gemini calls in parallel ──
@@ -875,13 +1197,20 @@ async def synthesize(
         dossier.research_confidence = _compute_research_confidence(
             artifacts, has_person_content
         )
-        # Thin signal warning: fewer than 2 strong sources
-        strong_sources = sum(1 for v in artifacts.videos if v.is_person_match) + len(artifacts.articles)
-        if strong_sources < 2:
+        # Thin signal warning based on signal strength
+        if signal_strength == "low":
             dossier.thin_signal_warning = (
-                "Limited public executive signal. "
-                "Analysis primarily based on role context and company information."
+                f"No direct interviews or public executive content found for {request.target_name or 'this person'}. "
+                "Analysis is role-inferred from title context and company information. "
+                "Validate key assumptions in conversation."
             )
+        else:
+            strong_sources = sum(1 for v in artifacts.videos if v.is_person_match) + len(artifacts.articles)
+            if strong_sources < 2:
+                dossier.thin_signal_warning = (
+                    "Limited public executive signal. "
+                    "Analysis primarily based on role context and company information."
+                )
 
     # ── Build response ──
     video_count = len(artifacts.videos)
