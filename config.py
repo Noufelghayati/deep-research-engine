@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     max_article_artifacts: int = 4
     max_transcript_chars: int = 30000
     max_transcription_duration_sec: int = 1500  # 25 min cap per video
-    pipeline_timeout_sec: int = 90  # generous budget; articles always run even after timeout
+    pipeline_timeout_sec: int = 100  # generous budget; articles always run even after timeout
     youtube_search_max_results: int = 5
 
     # Gemini settings
