@@ -38,6 +38,36 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w\s]", "", text.lower()).strip()
 
 
+def _linkedin_is_person_content(url: str, text: str, person_name: str) -> bool:
+    """Check if LinkedIn content is FROM or ABOUT the target person specifically.
+
+    Returns True if:
+      - The URL slug (profile /in/ or posts /posts/) contains the person's name parts
+      - OR the article text mentions the person's full name
+    Returns False if LinkedIn content is from another person at the same company.
+    """
+    if not person_name:
+        return False
+
+    name_parts = [p.lower() for p in person_name.split() if len(p) > 1]
+    url_lower = url.lower()
+
+    # Check if URL slug contains person name parts
+    # LinkedIn profiles: /in/carly-wegren/
+    # LinkedIn posts: /posts/carlywegren_... or /posts/carly-wegren_...
+    if "/in/" in url_lower or "/posts/" in url_lower:
+        # Count how many name parts appear in the URL
+        matches = sum(1 for part in name_parts if part in url_lower)
+        if matches >= min(2, len(name_parts)):
+            return True
+
+    # Check if article text mentions the person's full name
+    if person_name.lower() in text.lower():
+        return True
+
+    return False
+
+
 def _article_mentions_company(text: str, company_name: str) -> bool:
     """Check if article text actually mentions the company (full name)."""
     normalized_text = _normalize(text[:5000])
@@ -267,6 +297,7 @@ async def _search_duckduckgo(
 async def _search_serper(
     query: str, search_log: List[ArticleSearchEntry],
     allow_linkedin: bool = False,
+    time_filter: bool = True,
 ) -> List[str]:
     """Search using Serper.dev API (Google results)."""
     if not settings.serper_api_key:
@@ -279,10 +310,9 @@ async def _search_serper(
         return []
 
     api_url = "https://google.serper.dev/search"
-    payload = {
-        "q": query,
-        "tbs": "qdr:y",
-    }
+    payload = {"q": query}
+    if time_filter:
+        payload["tbs"] = "qdr:y"
     headers = {
         "X-API-KEY": settings.serper_api_key,
         "Content-Type": "application/json",
@@ -343,10 +373,11 @@ async def _search_serper(
 async def _web_search(
     query: str, search_log: List[ArticleSearchEntry],
     allow_linkedin: bool = False,
+    time_filter: bool = True,
 ) -> Tuple[List[str], str]:
     """Search using Serper.dev (primary) -> Brave -> DDG (last fallback).
     Returns (urls, source_engine)."""
-    urls = await _search_serper(query, search_log, allow_linkedin=allow_linkedin)
+    urls = await _search_serper(query, search_log, allow_linkedin=allow_linkedin, time_filter=time_filter)
     if urls:
         return urls, "serper"
 
@@ -382,7 +413,12 @@ async def search_and_fetch_articles(
     # Person-first query ordering: person queries first, company queries last
     # LinkedIn is allowed for person-specific queries only
     person_queries = []
+    person_linkedin_queries = []
     if person_name:
+        # Dedicated LinkedIn query — find the person's own profile/posts
+        person_linkedin_queries = [
+            f'"{person_name}" site:linkedin.com',
+        ]
         person_queries = [
             f'{person_name} {company_name}',
             f'{person_name} {company_name} interview OR podcast OR panel',
@@ -396,23 +432,26 @@ async def search_and_fetch_articles(
         f'{company_name} {year_range}',
     ]
 
-    # Build query list with metadata: (query, allow_linkedin)
+    # Build query list with metadata: (query, allow_linkedin, time_filter)
+    # Priority: 1) Person LinkedIn  2) Person general  3) Company
     queries_with_meta = []
+    for q in person_linkedin_queries:
+        queries_with_meta.append((q, True, False))   # LinkedIn allowed, no time filter (profiles are evergreen)
     for q in person_queries:
-        queries_with_meta.append((q, True))   # LinkedIn allowed for person queries
+        queries_with_meta.append((q, True, True))    # LinkedIn allowed for person queries
     for q in company_queries:
-        queries_with_meta.append((q, False))   # LinkedIn blocked for company queries
+        queries_with_meta.append((q, False, True))   # LinkedIn blocked for company queries
 
     max_urls_per_query = 4
 
-    for i, (query, allow_linkedin) in enumerate(queries_with_meta):
+    for i, (query, allow_linkedin, time_filter) in enumerate(queries_with_meta):
         if len(accepted) >= max_articles:
             break
 
         if i > 0:
             await asyncio.sleep(1.5)
 
-        candidate_urls, source = await _web_search(query, search_log, allow_linkedin=allow_linkedin)
+        candidate_urls, source = await _web_search(query, search_log, allow_linkedin=allow_linkedin, time_filter=time_filter)
         logger.info(
             f"Article search '{query[:50]}' returned {len(candidate_urls)} candidate URLs via {source}"
         )
@@ -436,8 +475,8 @@ async def search_and_fetch_articles(
                 continue
             seen_urls.add(url)
 
-            # Pre-fetch date check
-            old_year = _is_article_too_old(url, "")
+            # Pre-fetch date check (skip for LinkedIn — profiles are evergreen)
+            old_year = _is_article_too_old(url, "") if _LINKEDIN_DOMAIN not in url else None
             if old_year:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=url,
@@ -458,8 +497,8 @@ async def search_and_fetch_articles(
                 tried += 1
                 continue
 
-            # Post-fetch date check
-            old_year = _is_article_too_old(url, article.title)
+            # Post-fetch date check (skip for LinkedIn)
+            old_year = _is_article_too_old(url, article.title) if _LINKEDIN_DOMAIN not in url else None
             if old_year:
                 search_log.append(ArticleSearchEntry(
                     query=query, url=url,
@@ -470,7 +509,20 @@ async def search_and_fetch_articles(
                 tried += 1
                 continue
 
-            # Accept article if it mentions the company OR the person (for LinkedIn etc.)
+            # LinkedIn-specific validation: must be FROM or ABOUT the target person
+            is_linkedin = _LINKEDIN_DOMAIN in url
+            if is_linkedin and person_name:
+                if not _linkedin_is_person_content(url, article.text, person_name):
+                    search_log.append(ArticleSearchEntry(
+                        query=query, url=url,
+                        status="skipped_domain",
+                        reason=f"LinkedIn content not from/about '{person_name}' — belongs to another person",
+                        source=source,
+                    ))
+                    tried += 1
+                    continue
+
+            # Accept article if it mentions the company OR the person
             mentions_company = _article_mentions_company(article.text, company_name)
             mentions_person = (
                 person_name and person_name.lower() in article.text.lower()
