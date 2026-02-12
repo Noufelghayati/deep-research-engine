@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Gemini settings
     gemini_model: str = "gemini-2.5-flash"
-    gemini_max_output_tokens: int = 8192
+    gemini_max_output_tokens: int = 16384
     gemini_temperature: float = 0.3
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

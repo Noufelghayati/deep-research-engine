@@ -80,7 +80,12 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
             response_mime_type="application/json",
         ),
     )
-    return response.text
+    text = response.text
+    finish = getattr(response.candidates[0], 'finish_reason', None) if response.candidates else None
+    logger.info(f"Gemini response: {len(text)} chars, finish_reason={finish}")
+    if finish and str(finish) not in ('STOP', 'FinishReason.STOP', '1'):
+        logger.warning(f"Gemini non-STOP finish: {finish} — response may be truncated")
+    return text
 
 
 def _parse_json_safe(raw: str):
@@ -110,11 +115,15 @@ def _parse_json_safe(raw: str):
     except json.JSONDecodeError:
         pass
 
-    # Truncated JSON recovery
-    logger.warning("Attempting truncated JSON recovery")
+    # Truncated JSON recovery — handles nested structures like {"signals": [{...}, ...
+    logger.warning(f"Attempting truncated JSON recovery (input length: {len(cleaned)})")
+    logger.warning(f"First 200 chars: {cleaned[:200]}")
+    logger.warning(f"Last 200 chars: {cleaned[-200:]}")
+
+    # Strategy 1: Find last complete object at any depth and close surrounding structures
     try:
         depth = 0
-        last_complete_end = -1
+        last_complete_positions = {}  # depth -> last position where that depth closed
         in_string = False
         escape = False
         for i, ch in enumerate(cleaned):
@@ -129,18 +138,45 @@ def _parse_json_safe(raw: str):
                 continue
             if in_string:
                 continue
-            if ch == '{':
+            if ch in ('{', '['):
                 depth += 1
-            elif ch == '}':
+            elif ch in ('}', ']'):
                 depth -= 1
+                last_complete_positions[depth] = i
                 if depth == 0:
-                    last_complete_end = i
-        if last_complete_end > 0:
-            recovered = cleaned[:last_complete_end + 1]
-            if not recovered.rstrip().endswith(']'):
-                recovered = recovered.rstrip().rstrip(',') + ']'
-            return json.loads(recovered)
-    except (json.JSONDecodeError, Exception) as e:
+                    # Full top-level object/array recovered
+                    return json.loads(cleaned[:i + 1])
+
+        # Top-level didn't close — try to close it manually
+        # Find the last complete element inside the top-level structure
+        if 1 in last_complete_positions:
+            cut = last_complete_positions[1] + 1
+            recovered = cleaned[:cut].rstrip().rstrip(',')
+            # Close any open arrays and the outer object
+            if cleaned.lstrip().startswith('{'):
+                recovered += ']}'
+            elif cleaned.lstrip().startswith('['):
+                recovered += ']'
+            try:
+                result = json.loads(recovered)
+                logger.info(f"Truncated JSON recovery succeeded at position {cut}")
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 2: For {"signals": [...]} format, extract complete signal objects
+        if 2 in last_complete_positions:
+            cut = last_complete_positions[2] + 1
+            recovered = cleaned[:cut].rstrip().rstrip(',')
+            recovered += ']}'
+            try:
+                result = json.loads(recovered)
+                logger.info(f"Truncated JSON recovery (deep) succeeded at position {cut}")
+                return result
+            except json.JSONDecodeError:
+                pass
+
+    except Exception as e:
         logger.warning(f"Truncated JSON recovery failed: {e}")
 
     return []
