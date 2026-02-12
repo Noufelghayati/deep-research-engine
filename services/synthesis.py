@@ -9,6 +9,7 @@ from models.responses import (
     CATEGORY_ICONS,
 )
 from config import settings
+from typing import List
 import json
 import re
 import asyncio
@@ -174,7 +175,7 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
     return response.text
 
 
-def _parse_json_safe(raw: str) -> list | dict:
+def _parse_json_safe(raw: str):
     """Parse JSON from Gemini, handling common issues."""
     # Strip markdown code blocks
     text = raw.strip()
@@ -203,7 +204,7 @@ def _parse_json_safe(raw: str) -> list | dict:
     return json.loads(cleaned)
 
 
-def _build_signals(raw_signals: list, artifacts: CollectedArtifacts) -> list[Signal]:
+def _build_signals(raw_signals: list, artifacts: CollectedArtifacts) -> List[Signal]:
     """Convert raw Gemini output into Signal objects, enforcing max 5 and quality."""
     signals = []
     for i, raw in enumerate(raw_signals[:5], 1):
