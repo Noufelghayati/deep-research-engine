@@ -294,15 +294,18 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     await _step3_article_supplement(request, artifacts, emit=_emit)
     for a in artifacts.articles:
         await emit("found", kind="article", title=a.title)
-    await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
+    if artifacts.articles:
+        await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
+    else:
+        await emit("step", step="step3", status="done", message="Using video sources only")
 
     # Synthesis
-    await emit("step", step="synthesis", status="running", message="Generating research report with Gemini...")
+    await emit("step", step="synthesis", status="running", message="Extracting commercial signals...")
     if on_progress:
         video_count = len(artifacts.videos)
         article_count = len(artifacts.articles)
         transcript_count = sum(1 for v in artifacts.videos if v.transcript_available)
-        await emit("log", step="synthesis", message=f"Sending {video_count} video(s) ({transcript_count} with transcripts) + {article_count} article(s) to Gemini...")
+        await emit("log", step="synthesis", message=f"Analyzing {video_count} video(s) ({transcript_count} with transcripts) + {article_count} article(s)...")
     logger.info(
         f"Synthesis: {len(artifacts.videos)} videos, "
         f"{len(artifacts.articles)} articles, "
@@ -311,5 +314,6 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     artifacts.steps_attempted.append("synthesis")
 
     response = await synthesize(artifacts, request)
-    await emit("step", step="synthesis", status="done", message="Research complete!")
+    signal_count = len(response.signals)
+    await emit("step", step="synthesis", status="done", message=f"Found {signal_count} signal{'s' if signal_count != 1 else ''}")
     return response

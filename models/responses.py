@@ -3,42 +3,58 @@ from typing import List, Optional
 from enum import Enum
 
 
-class SourceType(str, Enum):
-    YOUTUBE = "youtube"
-    ARTICLE = "article"
+class SignalCategory(str, Enum):
+    SCALING = "SCALING"
+    INVESTING = "INVESTING"
+    PRIORITY = "PRIORITY"
+    CHALLENGE = "CHALLENGE"
+    TRACTION = "TRACTION"
+    BACKGROUND = "BACKGROUND"
 
 
-class MatchType(str, Enum):
-    PERSON = "person"
-    COMPANY_LEADERSHIP = "company_leadership"
-    COMPANY_CONTEXT = "company_context"
+CATEGORY_ICONS = {
+    "SCALING": "\U0001f680",
+    "INVESTING": "\U0001f4b0",
+    "PRIORITY": "\U0001f527",
+    "CHALLENGE": "\U0001f6a8",
+    "TRACTION": "\U0001f4ca",
+    "BACKGROUND": "\U0001f3af",
+}
 
 
-class SelectedSource(BaseModel):
-    type: SourceType
-    match_type: MatchType
-    title: str
-    url: str
-    why_selected: str
-    company_match_signals: List[str] = Field(default_factory=list)
+class SignalSource(BaseModel):
+    type: str = Field(description="'video' or 'article'")
+    title: str = ""
+    url: str = ""
+    timestamp: Optional[str] = Field(None, description="MM:SS for videos")
+    date: Optional[str] = None
 
 
-class TalkingPoint(BaseModel):
-    point: str
-    source_url: str
-    timestamp: Optional[str] = Field(
-        None, description="MM:SS timestamp into video, if applicable"
+class Signal(BaseModel):
+    id: int
+    category: str
+    icon: str
+    signal: str = Field(description="One-line declarative statement, max 20 words")
+    source_type: str = Field(description="VIDEO or ARTICLE")
+    expandable: dict = Field(
+        default_factory=dict,
+        description="Contains 'quote' (15-30 words) and 'source' object",
     )
+
+
+class PersonInfo(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    company: str
 
 
 class ResearchResponse(BaseModel):
-    selected_sources: List[SelectedSource]
-    pre_read: List[str] = Field(
-        default_factory=list,
-        description="Max ~7 bullet points for quick pre-read",
+    person: PersonInfo
+    signals: List[Signal] = Field(default_factory=list, max_length=5)
+    sources_analyzed: Optional[dict] = Field(
+        None,
+        description="Summary: videos count, articles count, recency",
     )
-    talking_points: List[TalkingPoint] = Field(default_factory=list)
-    draft_email: str = ""
     metadata: Optional[dict] = Field(
         None, description="Debug info: steps attempted, timings, etc."
     )

@@ -213,12 +213,19 @@ async def _search_serper(query: str, max_results: int) -> List[YouTubeCandidate]
 async def search_youtube(query: str, max_results: int = 5) -> List[YouTubeCandidate]:
     """
     Search for YouTube videos.
-    Brave (primary) -> DDG -> Serper.dev (last fallback).
+    Serper.dev (primary) -> Brave -> DDG (last fallback).
     """
-    # Brave/DDG use site:youtube.com prefix; Serper /videos doesn't need it
-    yt_query = f"site:youtube.com {query}"
+    # Try Serper first (most reliable, clean JSON API)
+    candidates = await _search_serper(query, max_results)
+    if candidates:
+        logger.info(
+            f"YouTube/Serper search '{query[:50]}' returned {len(candidates)} videos"
+        )
+        return candidates
 
-    # Try Brave first
+    # Fallback to Brave
+    logger.info("Serper returned no results, falling back to Brave")
+    yt_query = f"site:youtube.com {query}"
     candidates = await _search_brave(yt_query, max_results)
     if candidates:
         logger.info(
@@ -226,19 +233,10 @@ async def search_youtube(query: str, max_results: int = 5) -> List[YouTubeCandid
         )
         return candidates
 
-    # Fallback to DDG
+    # Last fallback: DDG
     logger.info("Brave returned no results, falling back to DDG")
     candidates = await _search_ddg(query, max_results)
-    if candidates:
-        logger.info(
-            f"YouTube/DDG search '{query[:50]}' returned {len(candidates)} videos"
-        )
-        return candidates
-
-    # Last fallback: Serper.dev video API (clean query, no site: prefix)
-    logger.info("DDG returned no results, falling back to Serper")
-    candidates = await _search_serper(query, max_results)  # uses original query without site:youtube.com
     logger.info(
-        f"YouTube/Serper search '{query[:50]}' returned {len(candidates)} videos"
+        f"YouTube/DDG search '{query[:50]}' returned {len(candidates)} videos"
     )
     return candidates

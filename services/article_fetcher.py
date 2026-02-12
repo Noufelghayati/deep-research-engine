@@ -316,34 +316,22 @@ async def _search_serper(
 async def _web_search(
     query: str, search_log: List[ArticleSearchEntry],
 ) -> Tuple[List[str], str]:
-    """Search using Brave (primary) -> DDG -> Serper.dev (last fallback).
+    """Search using Serper.dev (primary) -> Brave -> DDG (last fallback).
     Returns (urls, source_engine)."""
+    urls = await _search_serper(query, search_log)
+    if urls:
+        return urls, "serper"
+
+    logger.info(f"Serper returned 0 results for '{query[:40]}', trying Brave")
+
     urls = await _search_brave(query, search_log)
     if urls:
         return urls, "brave"
 
     logger.info(f"Brave returned 0 results for '{query[:40]}', trying DDG")
-    search_log.append(ArticleSearchEntry(
-        query=query, url="",
-        status="search_error",
-        reason="Brave returned 0 usable URLs, falling back to DDG",
-        source="brave",
-    ))
 
     urls = await _search_duckduckgo(query, search_log)
-    if urls:
-        return urls, "duckduckgo"
-
-    logger.info(f"DDG returned 0 results for '{query[:40]}', trying Serper")
-    search_log.append(ArticleSearchEntry(
-        query=query, url="",
-        status="search_error",
-        reason="DDG returned 0 usable URLs, falling back to Serper",
-        source="duckduckgo",
-    ))
-
-    urls = await _search_serper(query, search_log)
-    return urls, "serper"
+    return urls, "duckduckgo"
 
 
 async def search_and_fetch_article(

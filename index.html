@@ -49,70 +49,71 @@
     .results { display: none; }
     .results.active { display: block; }
 
-    .section { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
-    .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-    .badge {
-      font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 12px;
-      background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44;
+    /* Person header */
+    .person-header {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 20px 24px; margin-bottom: 20px; text-align: center;
     }
-    .badge.yt { background: #f8514922; color: #f85149; border-color: #f8514944; }
-    .badge.article { background: #3fb95022; color: #3fb950; border-color: #3fb95044; }
+    .person-name { font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .person-title-co { font-size: 14px; color: #8b949e; margin-top: 4px; }
 
-    /* Sources */
-    .source-item { padding: 12px; background: #0d1117; border-radius: 6px; margin-bottom: 8px; }
-    .source-item a { color: #58a6ff; text-decoration: none; font-weight: 500; }
-    .source-item a:hover { text-decoration: underline; }
-    .source-meta { font-size: 12px; color: #8b949e; margin-top: 4px; }
-
-    /* Pre-read bullets */
-    .bullet-list { list-style: none; }
-    .bullet-list li { padding: 8px 0 8px 20px; position: relative; font-size: 14px; line-height: 1.6; border-bottom: 1px solid #21262d; }
-    .bullet-list li:last-child { border-bottom: none; }
-    .bullet-list li::before { content: '\2022'; position: absolute; left: 0; color: #58a6ff; font-weight: bold; }
-
-    /* Talking points */
-    .tp-item { padding: 14px; background: #0d1117; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #58a6ff; }
-    .tp-text { font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
-    .tp-source { font-size: 12px; color: #8b949e; }
-    .tp-source a { color: #58a6ff; text-decoration: none; }
-
-    /* Email */
-    .email-block {
-      background: #0d1117; border-radius: 6px; padding: 20px; font-size: 14px;
-      line-height: 1.7; white-space: pre-wrap; border: 1px solid #30363d;
+    /* Signal cards */
+    .signals-container { margin-bottom: 20px; }
+    .signal-card {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s;
     }
-    .copy-btn {
-      background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px;
-      padding: 6px 14px; font-size: 12px; cursor: pointer; float: right; transition: all 0.2s;
+    .signal-card:hover { border-color: #484f58; }
+    .signal-card.expanded { border-color: #58a6ff; }
+
+    .signal-header {
+      display: flex; align-items: center; padding: 14px 18px; gap: 10px;
     }
-    .copy-btn:hover { color: #e1e4e8; border-color: #58a6ff; }
+    .signal-icon { font-size: 18px; flex-shrink: 0; }
+    .signal-text { flex: 1; font-size: 14px; font-weight: 500; line-height: 1.4; }
+    .signal-tag {
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+      flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .signal-tag.video { background: #f8514922; color: #f85149; }
+    .signal-tag.article { background: #3fb95022; color: #3fb950; }
+    .signal-expand {
+      font-size: 12px; color: #8b949e; flex-shrink: 0; transition: transform 0.2s;
+      width: 20px; text-align: center;
+    }
+    .signal-card.expanded .signal-expand { transform: rotate(90deg); }
 
-    /* Metadata */
-    .meta-grid { display: flex; gap: 16px; flex-wrap: wrap; }
-    .meta-item { font-size: 13px; color: #8b949e; }
-    .meta-item span { color: #e1e4e8; font-weight: 500; }
+    /* Expanded content */
+    .signal-detail {
+      display: none; padding: 0 18px 16px 46px;
+      border-top: 1px solid #21262d; margin-top: 0;
+    }
+    .signal-card.expanded .signal-detail { display: block; padding-top: 14px; }
 
-    /* Article log */
-    .log-entry { padding: 10px 12px; background: #0d1117; border-radius: 6px; margin-bottom: 6px; font-size: 13px; border-left: 3px solid #30363d; }
-    .log-entry.accepted { border-left-color: #3fb950; }
-    .log-entry.rejected_no_company_mention { border-left-color: #f85149; }
-    .log-entry.fetch_failed { border-left-color: #d29922; }
-    .log-entry.skipped_domain { border-left-color: #8b949e; }
-    .log-entry.no_results { border-left-color: #8b949e; }
-    .log-entry.search_error { border-left-color: #f85149; }
-    .log-entry.rejected_too_old { border-left-color: #d29922; }
-    .log-query { color: #8b949e; font-size: 11px; margin-bottom: 4px; }
-    .log-source { font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: #21262d; color: #8b949e; margin-left: 6px; }
-    .log-url { color: #58a6ff; word-break: break-all; }
-    .log-reason { color: #e1e4e8; margin-top: 3px; }
-    .log-status { font-size: 11px; font-weight: 600; text-transform: uppercase; }
-    .log-status.accepted { color: #3fb950; }
-    .log-status.rejected_no_company_mention { color: #f85149; }
-    .log-status.fetch_failed { color: #d29922; }
-    .log-status.skipped_domain { color: #8b949e; }
-    .log-status.no_results { color: #8b949e; }
-    .log-status.search_error { color: #f85149; }
-    .log-status.rejected_too_old { color: #d29922; }
+    .signal-quote {
+      font-size: 13px; color: #c9d1d9; font-style: italic; line-height: 1.6;
+      margin-bottom: 12px; padding-left: 12px; border-left: 3px solid #30363d;
+    }
+    .signal-quote::before { content: '\201C'; font-size: 18px; color: #484f58; }
+    .signal-quote::after { content: '\201D'; font-size: 18px; color: #484f58; }
+
+    .signal-source { font-size: 12px; color: #8b949e; line-height: 1.6; }
+    .signal-source a { color: #58a6ff; text-decoration: none; word-break: break-all; }
+    .signal-source a:hover { text-decoration: underline; }
+
+    /* Sources footer */
+    .sources-footer {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 14px 18px; font-size: 13px; color: #8b949e; margin-bottom: 20px;
+    }
+
+    /* Warning */
+    .warning-banner {
+      background: #d2992215; border: 1px solid #d2992244; border-radius: 8px;
+      padding: 12px 18px; color: #d29922; font-size: 14px; margin-bottom: 16px;
+      display: none;
+    }
+    .warning-banner.active { display: block; }
 
     /* Error */
     .error-box { background: #f8514915; border: 1px solid #f8514944; border-radius: 8px; padding: 16px; color: #f85149; font-size: 14px; margin-top: 16px; display: none; }
@@ -124,9 +125,9 @@
     <h1>Deep Research Engine</h1>
     <p class="subtitle">Sales prep powered by YouTube research + Gemini synthesis</p>
 
-    <!-- Transcription Test -->
+    <!-- Transcription Test (hidden) -->
     <div class="form-card" style="border-color:#d29922;display:none;" id="transcriptionTestCard">
-      <div class="section-title" style="color:#d29922;">Transcription Test (temporary)</div>
+      <div style="font-size:16px;font-weight:600;color:#d29922;margin-bottom:12px;">Transcription Test (temporary)</div>
       <div style="display:flex;gap:10px;align-items:flex-end;">
         <div class="form-group" style="flex:1;">
           <label>YouTube URL</label>
@@ -197,44 +198,10 @@
     </div>
 
     <div class="results" id="results">
-      <!-- Sources -->
-      <div class="section" id="sourcesSection">
-        <div class="section-title">Selected Sources</div>
-        <div id="sourcesList"></div>
-      </div>
-
-      <!-- Pre-Read -->
-      <div class="section">
-        <div class="section-title">Pre-Read</div>
-        <ul class="bullet-list" id="preReadList"></ul>
-      </div>
-
-      <!-- Talking Points -->
-      <div class="section">
-        <div class="section-title">Talking Points</div>
-        <div id="talkingPointsList"></div>
-      </div>
-
-      <!-- Draft Email -->
-      <div class="section">
-        <div class="section-title">
-          Draft Email
-          <button class="copy-btn" onclick="copyEmail()">Copy</button>
-        </div>
-        <div class="email-block" id="draftEmail"></div>
-      </div>
-
-      <!-- Metadata -->
-      <div class="section">
-        <div class="section-title">Metadata</div>
-        <div class="meta-grid" id="metaGrid"></div>
-      </div>
-
-      <!-- Article Search Log -->
-      <div class="section" id="articleLogSection" style="display:none;">
-        <div class="section-title">Article Search Log</div>
-        <div id="articleLogList"></div>
-      </div>
+      <div class="warning-banner" id="warningBanner"></div>
+      <div class="person-header" id="personHeader"></div>
+      <div class="signals-container" id="signalsContainer"></div>
+      <div class="sources-footer" id="sourcesFooter"></div>
     </div>
   </div>
 
@@ -279,7 +246,6 @@
       });
 
       let currentStep = null;
-      const stepHasLogs = {};
 
       function ensureStepContainer(stepId) {
         if (document.getElementById('step-' + stepId)) return;
@@ -297,7 +263,6 @@
         const logsDiv = document.getElementById('logs-' + stepId);
         if (!logsDiv) return;
         logsDiv.innerHTML += '<div>' + html + '</div>';
-        stepHasLogs[stepId] = true;
         progressLog.scrollTop = progressLog.scrollHeight;
       }
 
@@ -368,7 +333,7 @@
                   loading.classList.remove('active');
                 }
                 else if (evt.type === 'error') {
-                  errorBox.textContent = 'Error: ' + evt.message;
+                  errorBox.textContent = 'Something went wrong. Please try again.';
                   errorBox.classList.add('active');
                   btn.disabled = false;
                   loading.classList.remove('active');
@@ -380,7 +345,7 @@
         }
         read();
       }).catch(e => {
-        errorBox.textContent = 'Error: ' + e.message;
+        errorBox.textContent = 'Could not connect to the research engine. Please try again.';
         errorBox.classList.add('active');
         btn.disabled = false;
         loading.classList.remove('active');
@@ -388,100 +353,112 @@
     }
 
     function renderResults(data) {
-      // Sources
-      const sourcesList = document.getElementById('sourcesList');
-      sourcesList.innerHTML = '';
-      if (data.selected_sources.length === 0) {
-        sourcesList.innerHTML = '<div style="color:#8b949e;font-size:14px;">No sources found</div>';
+      // Person header
+      const personHeader = document.getElementById('personHeader');
+      const name = (data.person && data.person.name) || '';
+      const title = (data.person && data.person.title) || '';
+      const company = (data.person && data.person.company) || '';
+      const titleLine = [title, company].filter(Boolean).join(', ');
+      if (name) {
+        personHeader.innerHTML =
+          '<div class="person-name">' + escHtml(name) + '</div>' +
+          (titleLine ? '<div class="person-title-co">' + escHtml(titleLine) + '</div>' : '');
+        personHeader.style.display = '';
+      } else if (company) {
+        personHeader.innerHTML =
+          '<div class="person-name">' + escHtml(company) + '</div>';
+        personHeader.style.display = '';
+      } else {
+        personHeader.style.display = 'none';
       }
-      data.selected_sources.forEach(s => {
-        const badgeClass = s.type === 'youtube' ? 'yt' : 'article';
-        const badgeLabel = s.type === 'youtube' ? 'YouTube' : 'Article';
-        sourcesList.innerHTML += `
-          <div class="source-item">
-            <span class="badge ${badgeClass}">${badgeLabel}</span>
-            <span class="badge">${s.match_type}</span>
-            <a href="${s.url}" target="_blank">${s.title}</a>
-            <div class="source-meta">${s.why_selected}</div>
-          </div>`;
-      });
 
-      // Pre-read
-      const preReadList = document.getElementById('preReadList');
-      preReadList.innerHTML = '';
-      (data.pre_read || []).forEach(b => {
-        const li = document.createElement('li');
-        li.textContent = b;
-        preReadList.appendChild(li);
-      });
+      // Signals
+      const container = document.getElementById('signalsContainer');
+      container.innerHTML = '';
+      const signals = data.signals || [];
 
-      // Talking points
-      const tpList = document.getElementById('talkingPointsList');
-      tpList.innerHTML = '';
-      (data.talking_points || []).forEach(tp => {
-        const ts = tp.timestamp ? ` (${tp.timestamp})` : '';
-        tpList.innerHTML += `
-          <div class="tp-item">
-            <div class="tp-text">${tp.point}</div>
-            <div class="tp-source"><a href="${tp.source_url}" target="_blank">${tp.source_url}</a>${ts}</div>
-          </div>`;
-      });
-
-      // Email
-      document.getElementById('draftEmail').textContent = data.draft_email || 'No email generated';
-
-      // Metadata
-      const metaGrid = document.getElementById('metaGrid');
-      metaGrid.innerHTML = '';
-      if (data.metadata) {
-        const m = data.metadata;
-        const items = [
-          ['Steps', (m.steps_attempted || []).join(' → ')],
-          ['Videos', m.total_videos],
-          ['Articles', m.total_articles],
-          ['With Transcripts', m.videos_with_transcripts],
-        ];
-        items.forEach(([label, val]) => {
-          metaGrid.innerHTML += `<div class="meta-item">${label}: <span>${val}</span></div>`;
-        });
-
-        // Article search log
-        const logSection = document.getElementById('articleLogSection');
-        const logList = document.getElementById('articleLogList');
-        const log = m.article_search_log || [];
-        if (log.length > 0) {
-          logSection.style.display = 'block';
-          logList.innerHTML = '';
-          log.forEach(entry => {
-            const urlHtml = entry.url
-              ? `<div class="log-url">${entry.url}</div>`
-              : '';
-            const sourceHtml = entry.source
-              ? `<span class="log-source">${entry.source}</span>`
-              : '';
-            logList.innerHTML += `
-              <div class="log-entry ${entry.status}">
-                <div class="log-query">Query: ${entry.query}${sourceHtml}</div>
-                ${urlHtml}
-                <div class="log-reason">
-                  <span class="log-status ${entry.status}">${entry.status.replace(/_/g, ' ')}</span>
-                  &mdash; ${entry.reason}
-                </div>
-              </div>`;
-          });
-        } else {
-          logSection.style.display = 'none';
-        }
+      // Warning if < 3 signals
+      const warning = document.getElementById('warningBanner');
+      if (signals.length > 0 && signals.length < 3) {
+        warning.textContent = 'Limited research \u2014 found only ' + signals.length + ' signal' + (signals.length === 1 ? '' : 's') + '.';
+        warning.classList.add('active');
+      } else if (signals.length === 0) {
+        warning.textContent = 'No signals found \u2014 limited public information available for this target.';
+        warning.classList.add('active');
+      } else {
+        warning.classList.remove('active');
       }
+
+      signals.forEach((sig, idx) => {
+        const card = document.createElement('div');
+        card.className = 'signal-card';
+        card.id = 'signal-' + sig.id;
+
+        const sourceType = (sig.source_type || 'VIDEO').toUpperCase();
+        const tagClass = sourceType === 'ARTICLE' ? 'article' : 'video';
+
+        const exp = sig.expandable || {};
+        const quote = exp.quote || '';
+        const src = exp.source || {};
+        const srcTitle = src.title || '';
+        const srcUrl = src.url || '';
+        const srcTs = src.timestamp ? ' \u2022 ' + src.timestamp : '';
+        const srcDate = src.date ? ' \u2022 ' + src.date : '';
+
+        card.innerHTML =
+          '<div class="signal-header" onclick="toggleSignal(' + sig.id + ')">' +
+            '<span class="signal-icon">' + sig.icon + '</span>' +
+            '<span class="signal-text">' + escHtml(sig.signal) + '</span>' +
+            '<span class="signal-tag ' + tagClass + '">' + sourceType + '</span>' +
+            '<span class="signal-expand">&#9654;</span>' +
+          '</div>' +
+          '<div class="signal-detail">' +
+            (quote ? '<div class="signal-quote">' + escHtml(quote) + '</div>' : '') +
+            '<div class="signal-source">' +
+              (srcTitle ? escHtml(srcTitle) + srcDate + srcTs + '<br>' : '') +
+              (srcUrl ? '<a href="' + escAttr(srcUrl) + (src.timestamp ? '&t=' + tsToSec(src.timestamp) : '') + '" target="_blank">' + escHtml(srcUrl) + '</a>' : '') +
+            '</div>' +
+          '</div>';
+
+        container.appendChild(card);
+      });
+
+      // Sources footer
+      const footer = document.getElementById('sourcesFooter');
+      const sa = data.sources_analyzed || {};
+      const vCount = sa.videos || 0;
+      const aCount = sa.articles || 0;
+      const parts = [];
+      if (vCount) parts.push(vCount + ' video' + (vCount !== 1 ? 's' : ''));
+      if (aCount) parts.push(aCount + ' article' + (aCount !== 1 ? 's' : ''));
+      footer.innerHTML = 'Sources analyzed: ' + (parts.length ? parts.join(', ') : 'none');
     }
 
-    function copyEmail() {
-      const text = document.getElementById('draftEmail').textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        const btn = document.querySelector('.copy-btn');
-        btn.textContent = 'Copied!';
-        setTimeout(() => btn.textContent = 'Copy', 2000);
-      });
+    function toggleSignal(signalId) {
+      const card = document.getElementById('signal-' + signalId);
+      if (!card) return;
+      const wasExpanded = card.classList.contains('expanded');
+      // Collapse all
+      document.querySelectorAll('.signal-card.expanded').forEach(c => c.classList.remove('expanded'));
+      // Expand clicked (if it wasn't already open)
+      if (!wasExpanded) card.classList.add('expanded');
+    }
+
+    function tsToSec(ts) {
+      if (!ts) return 0;
+      const parts = ts.split(':');
+      if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      return 0;
+    }
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function escAttr(s) {
+      return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     // Allow Enter key on company field to submit
@@ -516,7 +493,6 @@
       evtSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
 
-        // Final result with transcript
         if (data.stage === 'result') {
           evtSource.close();
           document.getElementById('testMeta').textContent =
@@ -530,7 +506,6 @@
           return;
         }
 
-        // Error
         if (data.stage === 'error') {
           evtSource.close();
           errorBox.textContent = 'Error: ' + (data.detail || 'Unknown error');
@@ -540,7 +515,6 @@
           return;
         }
 
-        // Progress update
         if (typeof data.percent === 'number' && data.percent >= 0) {
           bar.style.width = data.percent + '%';
           pct.textContent = data.percent + '%';
@@ -552,7 +526,7 @@
 
       evtSource.onerror = function() {
         evtSource.close();
-        errorBox.textContent = 'Error: Connection to server lost';
+        errorBox.textContent = 'Connection lost';
         errorBox.classList.add('active');
         btn.disabled = false;
         loading.classList.remove('active');

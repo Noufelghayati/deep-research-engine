@@ -94,7 +94,7 @@ async def research_stream(request: ResearchRequest):
         except Exception as e:
             elapsed = round(time.time() - start_time, 1)
             logger.error(f"Research stream failed after {elapsed}s: {e}", exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Something went wrong. Please try again.'})}\n\n"
 
     return StreamingResponse(
         generate(),
