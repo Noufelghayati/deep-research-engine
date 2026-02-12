@@ -176,7 +176,7 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
 
 
 def _parse_json_safe(raw: str):
-    """Parse JSON from Gemini, handling common issues."""
+    """Parse JSON from Gemini, handling common issues including truncation."""
     # Strip markdown code blocks
     text = raw.strip()
     if text.startswith("```"):
@@ -198,10 +198,51 @@ def _parse_json_safe(raw: str):
     except json.JSONDecodeError:
         pass
 
-    # Last resort
+    # Replace unescaped newlines
     cleaned = re.sub(r'(?<!\\)\n', ' ', text)
     cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', ' ', cleaned)
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # Truncated JSON recovery: find the last complete object in the array
+    # This handles when Gemini output is cut off mid-object
+    logger.warning("Attempting truncated JSON recovery")
+    try:
+        # Find all complete {...} objects
+        depth = 0
+        last_complete_end = -1
+        in_string = False
+        escape = False
+        for i, ch in enumerate(cleaned):
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"' and not escape:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    last_complete_end = i
+        if last_complete_end > 0:
+            recovered = cleaned[:last_complete_end + 1]
+            # Close the array if needed
+            if not recovered.rstrip().endswith(']'):
+                recovered = recovered.rstrip().rstrip(',') + ']'
+            return json.loads(recovered)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"Truncated JSON recovery failed: {e}")
+
+    return []
 
 
 def _build_signals(raw_signals: list, artifacts: CollectedArtifacts) -> List[Signal]:
