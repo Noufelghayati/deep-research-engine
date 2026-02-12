@@ -219,11 +219,13 @@ STRICT RULES:
 1. MAXIMUM 5 signals. Return FEWER if quality threshold not met.
    3 strong signals > 5 weak ones.
 2. Each signal = ONE declarative sentence, max 20 words.
-3. REQUIRED COMPOSITION (when possible):
-   - At least 1 GROWTH signal
-   - At least 1 MARKET or PRODUCT signal
-   - At least 1 different category
-   - 5th signal is optional (only if genuinely strong)
+3. REQUIRED COMPOSITION — signals MUST be multi-dimensional:
+   - Signal 1: GROWTH (expansion, scaling, hiring)
+   - Signal 2: MARKET or CHALLENGE (partnerships, funding, deals OR pain points)
+   - Signal 3: PRODUCT (tech priorities, operational focus)
+   - Signal 4: TRACTION or BACKGROUND (metrics OR prior roles)
+   - Signal 5: Any remaining strong category (optional, only if genuinely strong)
+   NEVER repeat the same category more than once. Each signal must be a DIFFERENT category.
 4. Must include specific details: numbers, timelines, percentages, dollar amounts, names.
 5. IGNORE: generic statements, philosophy without action, marketing copy, press release fluff.
 6. Each signal must answer: "Why does a sales rep care about this?"
@@ -354,9 +356,11 @@ SECTION RULES:
 
 2. STRATEGIC FOCUS (3-6 themes):
    - Synthesized across multiple sources (NOT per-source summaries)
-   - Group by category with icon. Cite sources inline.
+   - Group by category. Cite sources inline.
    - May be longer than Quick Prep signals.
-   - Use categories: GROWTH, MARKET, PRODUCT, CHALLENGE, TRACTION, BACKGROUND
+   - MUST use ONLY these exact category values:
+     GROWTH, MARKET, PRODUCT, CHALLENGE, TRACTION, BACKGROUND
+   - Do NOT invent new category names. Map every theme to one of these 6.
 
 3. QUOTES (3-5 direct quotes, 15-40 words each):
    - DIRECT quotes only, no paraphrasing
@@ -434,9 +438,11 @@ def _build_dossier(raw: dict) -> FullDossier:
         if not isinstance(t, dict):
             continue
         category = (t.get("category") or "").upper()
+        # Deterministic icon: always use our mapping, never trust Gemini's icon
+        icon = CATEGORY_ICONS.get(category, "")
         themes.append({
             "category": category,
-            "icon": t.get("icon") or CATEGORY_ICONS.get(category, ""),
+            "icon": icon,
             "title": t.get("title") or "",
             "bullets": [b for b in (t.get("bullets") or []) if isinstance(b, str)],
         })
@@ -500,51 +506,63 @@ async def synthesize(
     source_material = _build_source_material(artifacts)
     loop = asyncio.get_event_loop()
 
-    # ── Call 1: Quick Prep ──
+    # Build both prompts upfront
     quick_system = _build_quick_prep_system(request, has_person_content)
     quick_content = f"Analyze the following sources and extract commercial signals:\n\n{source_material}"
+    dossier_system = _build_dossier_system(request, has_person_content)
+    dossier_content = f"Build a full research dossier from these sources:\n\n{source_material}"
 
-    prior_role = None
-    signals = []
-    try:
-        raw_text = await loop.run_in_executor(
+    # ── Run both Gemini calls in parallel ──
+    async def _run_quick_prep():
+        return await loop.run_in_executor(
             None, _call_gemini_sync, quick_system, quick_content
         )
-        parsed = _parse_json_safe(raw_text.strip())
 
-        if isinstance(parsed, dict):
-            prior_role = parsed.get("prior_role")
-            raw_signals = parsed.get("signals") or []
-        elif isinstance(parsed, list):
-            raw_signals = parsed
-        else:
-            raw_signals = []
-
-        signals = _build_signals(raw_signals)
-        for i, sig in enumerate(signals, 1):
-            sig.id = i
-
-    except Exception as e:
-        logger.error(f"Gemini Quick Prep error: {e}")
-
-    # ── Call 2: Full Dossier ──
-    dossier = None
-    try:
-        dossier_system = _build_dossier_system(request, has_person_content)
-        dossier_content = f"Build a full research dossier from these sources:\n\n{source_material}"
-
-        raw_text2 = await loop.run_in_executor(
+    async def _run_dossier():
+        return await loop.run_in_executor(
             None, _call_gemini_sync, dossier_system, dossier_content
         )
-        parsed2 = _parse_json_safe(raw_text2.strip())
 
-        if isinstance(parsed2, dict):
-            dossier = _build_dossier(parsed2)
-        else:
-            logger.warning("Dossier call returned non-dict, skipping")
+    quick_result, dossier_result = await asyncio.gather(
+        _run_quick_prep(),
+        _run_dossier(),
+        return_exceptions=True,
+    )
 
-    except Exception as e:
-        logger.error(f"Gemini Dossier error: {e}")
+    # ── Parse Quick Prep ──
+    prior_role = None
+    signals = []
+    if isinstance(quick_result, Exception):
+        logger.error(f"Gemini Quick Prep error: {quick_result}")
+    else:
+        try:
+            parsed = _parse_json_safe(quick_result.strip())
+            if isinstance(parsed, dict):
+                prior_role = parsed.get("prior_role")
+                raw_signals = parsed.get("signals") or []
+            elif isinstance(parsed, list):
+                raw_signals = parsed
+            else:
+                raw_signals = []
+            signals = _build_signals(raw_signals)
+            for i, sig in enumerate(signals, 1):
+                sig.id = i
+        except Exception as e:
+            logger.error(f"Quick Prep parse error: {e}")
+
+    # ── Parse Full Dossier ──
+    dossier = None
+    if isinstance(dossier_result, Exception):
+        logger.error(f"Gemini Dossier error: {dossier_result}")
+    else:
+        try:
+            parsed2 = _parse_json_safe(dossier_result.strip())
+            if isinstance(parsed2, dict):
+                dossier = _build_dossier(parsed2)
+            else:
+                logger.warning("Dossier call returned non-dict, skipping")
+        except Exception as e:
+            logger.error(f"Dossier parse error: {e}")
 
     # ── Build response ──
     video_count = len(artifacts.videos)
