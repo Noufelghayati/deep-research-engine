@@ -240,8 +240,9 @@ def score_podcast_candidate(
       Person in title:         +0.25
       Company in description:  +0.15
       Person in description:   +0.10
+      Person+Company together: +0.10 (guest appearance signal)
       Podcast name matches:    +0.10
-      C-suite title bonus:     +0.01 to +0.10
+      C-suite title bonus:     +0.01 to +0.10 (checked in title AND description)
     """
     score = 0.0
     signals = []
@@ -273,10 +274,18 @@ def score_podcast_candidate(
         score += 0.03
         signals.append("description_weak")
 
-    if _person_mentioned(candidate.description, person_name):
+    person_in_desc = _person_mentioned(candidate.description, person_name)
+    if person_in_desc:
         score += 0.10
         signals.append("person_in_description")
         is_person_match = True
+
+    # Guest appearance bonus: person + company both in description
+    # (common pattern: "Andrey Kleymenov, CEO @ Pix4D" in episode description)
+    company_in_desc = desc_strong > 0 or desc_weak > 0
+    if person_in_desc and company_in_desc:
+        score += 0.10
+        signals.append("guest_appearance")
 
     # Podcast show name signal
     if candidate.podcast_title:
@@ -285,11 +294,17 @@ def score_podcast_candidate(
             score += 0.10
             signals.append("podcast_matches_company")
 
-    # C-suite title bonus
+    # C-suite title bonus — check both title AND description
+    # (podcast descriptions often have "CEO @ Company" even when title doesn't)
     title_bonus, title_signal = _csuite_title_bonus(candidate.title)
     if title_bonus > 0:
         score += title_bonus
         signals.append(title_signal)
+    else:
+        desc_bonus, desc_signal = _csuite_title_bonus(candidate.description)
+        if desc_bonus > 0:
+            score += desc_bonus
+            signals.append(f"desc_{desc_signal}")
 
     scored = ScoredPodcast(
         episode_id=candidate.episode_id,
