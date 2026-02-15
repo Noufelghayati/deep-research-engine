@@ -2,16 +2,19 @@
 Podcast episode discovery via Serper + ListenNotes scraping + Gemini transcription.
 
 Pipeline:
-  1. Serper search  →  site:listennotes.com results
-  2. Scrape episode page  →  audio URL + metadata  (via Webshare proxy)
-  3. Download audio from CDN  →  trim  →  Gemini transcription
+  1a. Serper search  →  site:listennotes.com results
+  1b. Fallback: scrape ListenNotes search page directly (via proxy)
+  2.  Scrape episode page  →  audio URL + metadata  (via Webshare proxy)
+  3.  Download audio from CDN  →  trim  →  Gemini transcription
 """
 
 import re
+import json
 import asyncio
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
+from urllib.parse import quote_plus
 import httpx
 from bs4 import BeautifulSoup
 from config import settings
@@ -59,10 +62,10 @@ def _noop_log(msg):
 
 
 # ---------------------------------------------------------------------------
-# 1. Serper search for ListenNotes episodes
+# 1a. Serper search for ListenNotes episodes
 # ---------------------------------------------------------------------------
 
-async def search_podcast_episodes(
+async def _serper_search_podcasts(
     person_name: str,
     company_name: str,
     max_results: int = 5,
@@ -72,7 +75,7 @@ async def search_podcast_episodes(
     Returns raw PodcastCandidate list (no audio URLs yet — those come from scraping).
     """
     if not settings.serper_api_key:
-        logger.info("Podcast search skipped: no Serper API key")
+        logger.info("Serper podcast search skipped: no Serper API key")
         return []
 
     queries = [
@@ -159,8 +162,227 @@ async def search_podcast_episodes(
         except Exception as e:
             logger.warning(f"Serper podcast search failed for '{query[:60]}': {e}")
 
-    logger.info(f"Podcast search: {len(candidates)} ListenNotes episodes found")
+    logger.info(f"Serper podcast search: {len(candidates)} ListenNotes episodes found")
     return candidates
+
+
+# ---------------------------------------------------------------------------
+# 1b. Direct ListenNotes search page scraping (fallback)
+# ---------------------------------------------------------------------------
+
+async def _listennotes_direct_search(
+    person_name: str,
+    company_name: str,
+    max_results: int = 5,
+) -> List[PodcastCandidate]:
+    """
+    Scrape the ListenNotes search page directly via Webshare proxy.
+    Fallback when Serper returns 0 results (Google hasn't indexed all episodes).
+
+    URL format: https://www.listennotes.com/search/?q=QUERY&sort_by_date=0&scope=episode
+    """
+    if not settings.webshare_proxy_url:
+        logger.info("Direct ListenNotes search skipped: no proxy configured")
+        return []
+
+    queries = [
+        person_name,
+        f"{person_name} {company_name}",
+    ]
+
+    candidates = []
+    seen_urls = set()
+
+    for query in queries:
+        if len(candidates) >= max_results:
+            break
+
+        search_url = (
+            f"https://www.listennotes.com/search/"
+            f"?q={quote_plus(query)}&sort_by_date=0&scope=episode"
+            f"&offset=0&language=Any%20language&len_min=0"
+        )
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=20.0,
+                follow_redirects=True,
+                headers=_HEADERS,
+                proxy=settings.webshare_proxy_url,
+            ) as client:
+                resp = await client.get(search_url)
+
+            if resp.status_code != 200:
+                logger.warning(f"ListenNotes search page HTTP {resp.status_code} for '{query[:40]}'")
+                continue
+
+            html = resp.text
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Strategy 1: Parse JSON-LD or structured data
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    ld = json.loads(script.string or "")
+                    items = ld if isinstance(ld, list) else [ld]
+                    for item in items:
+                        if item.get("@type") == "ItemList":
+                            for elem in item.get("itemListElement", []):
+                                ep = elem.get("item", elem)
+                                ep_url = ep.get("url", "")
+                                if ep_url and ep_url not in seen_urls and "listennotes.com" in ep_url:
+                                    seen_urls.add(ep_url)
+                                    parts = ep_url.rstrip("/").split("/")
+                                    episode_id = parts[-1] if parts else ""
+                                    candidates.append(PodcastCandidate(
+                                        episode_id=episode_id,
+                                        title=ep.get("name", ""),
+                                        description=ep.get("description", ""),
+                                        podcast_title="",
+                                        published_at=str(ep.get("datePublished", ""))[:10],
+                                        audio_url="",
+                                        link=ep_url,
+                                    ))
+                                    if len(candidates) >= max_results:
+                                        break
+                except Exception:
+                    continue
+
+            if candidates:
+                logger.info(f"Direct ListenNotes search (JSON-LD): found {len(candidates)} episodes")
+                continue
+
+            # Strategy 2: Parse search result cards from HTML
+            # ListenNotes search results are typically in elements with episode links
+            # Look for links to episode pages: /podcasts/show-name/episode-title-ID/
+            episode_links = soup.find_all("a", href=re.compile(r"/podcasts/[^/]+/[^/]+-\w{10,}/"))
+            for link_tag in episode_links:
+                href = link_tag.get("href", "")
+                if not href:
+                    continue
+
+                # Make absolute URL
+                if href.startswith("/"):
+                    href = f"https://www.listennotes.com{href}"
+
+                if href in seen_urls:
+                    continue
+                seen_urls.add(href)
+
+                # Extract episode ID
+                parts = href.rstrip("/").split("/")
+                episode_id = parts[-1] if parts else ""
+
+                # Get title from link text
+                title = link_tag.get_text(strip=True)
+                if not title or len(title) < 5:
+                    continue
+
+                # Clean up
+                title = re.sub(r'\s*\|\s*Listen\s*Notes\s*$', '', title).strip()
+
+                # Try to find description/snippet nearby
+                description = ""
+                parent = link_tag.find_parent(["div", "li", "article"])
+                if parent:
+                    # Look for description text in the card
+                    desc_elem = parent.find(["p", "span"], class_=re.compile(r"desc|snippet|summary", re.I))
+                    if desc_elem:
+                        description = desc_elem.get_text(strip=True)[:500]
+
+                    # Try to find podcast show name
+                    podcast_title = ""
+                    show_elem = parent.find(["a", "span"], class_=re.compile(r"show|podcast|channel", re.I))
+                    if show_elem and show_elem != link_tag:
+                        podcast_title = show_elem.get_text(strip=True)
+
+                    # Try to find date
+                    published_at = ""
+                    date_elem = parent.find(["span", "time"], class_=re.compile(r"date|time|pub", re.I))
+                    if date_elem:
+                        date_text = date_elem.get_text(strip=True)
+                        date_match = re.search(r"(\w+ \d{1,2}, \d{4})", date_text)
+                        if date_match:
+                            published_at = date_match.group(1)
+                else:
+                    podcast_title = ""
+                    published_at = ""
+
+                candidates.append(PodcastCandidate(
+                    episode_id=episode_id,
+                    title=title,
+                    description=description,
+                    podcast_title=podcast_title,
+                    published_at=published_at,
+                    audio_url="",
+                    link=href,
+                ))
+
+                if len(candidates) >= max_results:
+                    break
+
+            # Strategy 3: Broader fallback — find any listennotes episode URLs in the page
+            if not candidates:
+                all_links = re.findall(
+                    r'href="(https?://(?:www\.)?listennotes\.com/podcasts/[^"]+)"',
+                    html,
+                )
+                for href in all_links:
+                    if href in seen_urls:
+                        continue
+                    # Must look like an episode page (has multiple path segments)
+                    path_parts = href.rstrip("/").split("/")
+                    if len(path_parts) < 6:  # scheme + empty + domain + podcasts + show + episode
+                        continue
+                    seen_urls.add(href)
+                    episode_id = path_parts[-1]
+
+                    candidates.append(PodcastCandidate(
+                        episode_id=episode_id,
+                        title="",  # Will be filled by scrape_episode_page
+                        description="",
+                        podcast_title="",
+                        published_at="",
+                        audio_url="",
+                        link=href,
+                    ))
+
+                    if len(candidates) >= max_results:
+                        break
+
+        except Exception as e:
+            logger.warning(f"Direct ListenNotes search failed for '{query[:40]}': {e}")
+
+    logger.info(f"Direct ListenNotes search: {len(candidates)} episodes found")
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# 1. Combined podcast search (Serper → direct fallback)
+# ---------------------------------------------------------------------------
+
+async def search_podcast_episodes(
+    person_name: str,
+    company_name: str,
+    max_results: int = 5,
+) -> Tuple[List[PodcastCandidate], str]:
+    """
+    Search for podcast episodes mentioning the person.
+    Tries Serper first; if 0 results, falls back to direct ListenNotes scraping.
+
+    Returns (candidates, search_method) where search_method is 'serper' or 'direct'.
+    """
+    # Try Serper first
+    candidates = await _serper_search_podcasts(person_name, company_name, max_results)
+    if candidates:
+        return candidates, "serper"
+
+    # Fallback: scrape ListenNotes search page directly
+    logger.info("Serper returned 0 podcast results, trying direct ListenNotes search...")
+    candidates = await _listennotes_direct_search(person_name, company_name, max_results)
+    if candidates:
+        return candidates, "direct"
+
+    return [], "none"
 
 
 # ---------------------------------------------------------------------------

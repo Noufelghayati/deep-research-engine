@@ -63,15 +63,16 @@ async def _step0_podcasts(
     logger.info(f"Step 0: Podcast search for '{request.target_name}'")
     artifacts.steps_attempted.append("step0_podcasts")
 
-    # Search for podcast episodes via Serper
-    candidates = await search_podcast_episodes(
+    # Search for podcast episodes (Serper first, then direct ListenNotes fallback)
+    candidates, search_method = await search_podcast_episodes(
         request.target_name,
         request.target_company,
         max_results=5,
     )
 
+    method_label = {"serper": "Serper", "direct": "ListenNotes direct search", "none": "Serper"}.get(search_method, search_method)
     if emit:
-        await emit("log", step="step0", message=f"Serper found {len(candidates)} ListenNotes episode(s)")
+        await emit("log", step="step0", message=f"{method_label} found {len(candidates)} ListenNotes episode(s)")
 
     if not candidates:
         if emit:
