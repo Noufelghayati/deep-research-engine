@@ -51,6 +51,10 @@ class PersonInfo(BaseModel):
     prior_role: Optional[str] = Field(
         None, description="e.g. 'CMO, Impossible Foods'"
     )
+    executive_summary: Optional[str] = Field(
+        None,
+        description="2-3 sentence executive summary for Quick Prep header",
+    )
 
 
 # ── Executive Orientation (Quick Prep — between header and signals) ──
@@ -68,6 +72,10 @@ class ExecutiveOrientation(BaseModel):
 class ResearchConfidence(BaseModel):
     level: str = "low"  # "high", "medium", "low"
     label: str = ""
+    reasons: List[str] = Field(
+        default_factory=list,
+        description="Human-readable reasons supporting the confidence level",
+    )
 
 
 # ── Executive Profile & Strategic Context (Dossier section 2) ──
@@ -151,10 +159,24 @@ class FullDossier(BaseModel):
     sources: List[DossierSource] = Field(default_factory=list)
 
 
+class OpeningMove(BaseModel):
+    """A single conversation opening move suggestion."""
+    angle: str = Field(description="Short label, e.g. 'Scaling Pain'")
+    suggestion: str = Field(description="1-2 sentence conversation opener")
+
+
 class ResearchResponse(BaseModel):
     person: PersonInfo
     executive_orientation: Optional[ExecutiveOrientation] = None
     signals: List[Signal] = Field(default_factory=list, max_length=5)
+    opening_moves: List[OpeningMove] = Field(
+        default_factory=list,
+        description="3 conversation opening suggestions for the sales rep",
+    )
+    pull_quote: Optional[str] = Field(
+        None,
+        description="Best direct quote from the executive (verbatim, 15-40 words)",
+    )
     dossier: Optional[FullDossier] = Field(
         None, description="Full Dossier (VIEW 2)"
     )

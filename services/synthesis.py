@@ -6,6 +6,7 @@ from models.responses import (
     ResearchResponse,
     PersonInfo,
     Signal,
+    OpeningMove,
     FullDossier,
     DossierBackground,
     DossierStrategicFocus,
@@ -236,7 +237,7 @@ def _compute_research_confidence(
     artifacts: CollectedArtifacts,
     has_person_content: bool,
 ) -> ResearchConfidence:
-    """Compute research confidence from source quality."""
+    """Compute research confidence from source quality, with human-readable reasons."""
     now = datetime.now()
     six_months_ago = now - timedelta(days=180)
 
@@ -253,21 +254,43 @@ def _compute_research_confidence(
         if dt and dt >= six_months_ago:
             recent_count += 1
 
+    # Build human-readable reasons list
+    reasons = []
+    if direct_interviews > 0:
+        reasons.append(f"{direct_interviews} direct interview{'s' if direct_interviews != 1 else ''} found")
+    else:
+        reasons.append("No direct interviews found")
+
+    if recent_count > 0:
+        reasons.append(f"{recent_count} source{'s' if recent_count != 1 else ''} from the past 6 months")
+    else:
+        reasons.append("No recent sources (past 6 months)")
+
+    if len(artifacts.videos) > 0:
+        with_transcript = sum(1 for v in artifacts.videos if v.transcript_available)
+        reasons.append(f"{with_transcript}/{len(artifacts.videos)} videos with transcripts")
+
+    if len(artifacts.articles) > 0:
+        reasons.append(f"{len(artifacts.articles)} article{'s' if len(artifacts.articles) != 1 else ''} analyzed")
+
     if direct_interviews >= 3 and recent_count >= 1:
         return ResearchConfidence(
             level="high",
             label=f"{direct_interviews} direct interviews with recent coverage",
+            reasons=reasons,
         )
     elif direct_interviews >= 1 and total_sources >= 4:
         return ResearchConfidence(
             level="medium",
             label=f"{direct_interviews} interview(s) + {total_sources - direct_interviews} supporting sources",
+            reasons=reasons,
         )
     else:
         return ResearchConfidence(
             level="low",
             label="No direct interviews; role-based synthesis only" if direct_interviews == 0
                   else f"Limited sources ({total_sources} total)",
+            reasons=reasons,
         )
 
 
@@ -448,16 +471,78 @@ WHAT TO LOOK FOR IN SOURCES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
+PART 3: EXECUTIVE SUMMARY (2-3 sentences)
+═══════════════════════════════════════
+
+Write a concise 2-3 sentence executive summary that captures:
+- Who this person is and their current role context
+- Their primary strategic focus or what defines their leadership right now
+- The key tension or pressure they're navigating
+
+This appears directly under the person's name/title in the Quick Prep header.
+It should give a sales rep instant context before reading signals.
+
+Example:
+"Jordan Schenck is an impact-driven CEO navigating Flashfood's transition from startup to enterprise scale.
+She's betting on aggressive retail expansion (25% store growth) while maintaining a triple-bottom-line narrative.
+The core tension: proving commercial viability fast enough to justify the growth trajectory."
+
+RULES:
+- Write in third person
+- Be specific (numbers, timelines, named pressures)
+- Show the central tension or trade-off
+- Do NOT repeat the orientation lines verbatim""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 4: OPENING MOVES (3 conversation starters)
+═══════════════════════════════════════
+
+Generate exactly 3 conversation opening suggestions for the sales rep.
+Each move has an "angle" (2-4 word label) and a "suggestion" (1-2 sentence opener).
+
+These should be smart, insight-led openers — NOT generic small talk.
+Each should reference a specific signal or pressure from the research.
+
+Example:
+{
+  "angle": "Scaling Pain",
+  "suggestion": "Your 25% store expansion this year is aggressive — how are you thinking about operational infrastructure keeping pace?"
+}
+{
+  "angle": "Enterprise Bet",
+  "suggestion": "The Kroger pilot feels like a make-or-break proof point. What does success look like for that partnership?"
+}
+{
+  "angle": "Mission vs. Margin",
+  "suggestion": "You've talked about the triple bottom line — how do you handle board conversations when impact and margin compete?"
+}
+
+RULES:
+- Each angle must target a DIFFERENT dimension (don't repeat themes)
+- Reference specific facts/signals from the research
+- Frame as genuine curiosity, not sales pitch
+- Make the exec think "this person did their homework"
+- 1-2 sentences per suggestion, conversational tone""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": "CMO, Impossible Foods" or null,
+  "executive_summary": "2-3 sentence summary...",
   "executive_orientation": {
     "growth_posture": "Aggressive expansion leader in proof-of-scale phase",
     "functional_bias": "Marketing-led operator balancing impact narrative with commercial viability",
     "role_context": "New CEO (8 months) investing in product quality during rapid scaling",
     "vulnerable": "Vulnerable: Execution risk, retailer ROI pressure, unproven at enterprise scale"
   },
+  "opening_moves": [
+    {"angle": "Scaling Pain", "suggestion": "Your 25% store expansion..."},
+    {"angle": "Enterprise Bet", "suggestion": "The Kroger pilot feels like..."},
+    {"angle": "Mission vs. Margin", "suggestion": "You've talked about..."}
+  ],
   "signals": [
     {
       "category": "GROWTH",
@@ -474,8 +559,8 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_orientation", and "signals".
-If no quality signals found, return {"prior_role": null, "executive_orientation": {...}, "signals": []}.""")
+Return a JSON object with "prior_role", "executive_summary", "executive_orientation", "opening_moves", and "signals".
+If no quality signals found, return {"prior_role": null, "executive_summary": "...", "executive_orientation": {...}, "opening_moves": [...], "signals": []}.""")
 
     return "\n".join(lines)
 
@@ -571,16 +656,58 @@ For inferred signals, set source type to "article" and use the most relevant com
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
+PART 3: EXECUTIVE SUMMARY (2-3 sentences — LOW SIGNAL MODE)
+═══════════════════════════════════════
+
+Write a concise 2-3 sentence summary that honestly frames what we know.
+- Lead with the person's identity and role
+- Acknowledge limited direct signal
+- Frame what they're likely navigating based on role context
+
+Example:
+"[Name] serves as [Title] at [Company], a [brief company context].
+Limited direct executive content is available; analysis is primarily role-inferred.
+As [title], they're likely navigating [key role-typical challenge]."
+
+RULES:
+- Write in third person
+- Be honest about confidence level
+- Do NOT speculate on psychology""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 4: OPENING MOVES (3 conversation starters — LOW SIGNAL MODE)
+═══════════════════════════════════════
+
+Generate 3 conversation openers even with limited signal.
+Use role context and company information to craft smart questions.
+
+Example:
+{"angle": "Role Context", "suggestion": "I'd love to understand how your priorities have evolved since joining [Company] — what's top of mind for you right now?"}
+
+RULES:
+- Frame as genuine discovery questions (we don't have deep signal, so ASK)
+- Reference company context the person operates in
+- Each angle targets a different dimension""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": null,
+  "executive_summary": "2-3 sentence summary acknowledging limited signal...",
   "executive_orientation": {
     "growth_posture": "Limited direct signal — ...",
     "functional_bias": "...",
     "role_context": "...",
     "vulnerable": "Limited direct signal — role-typical exposures include ..."
   },
+  "opening_moves": [
+    {"angle": "Role Context", "suggestion": "..."},
+    {"angle": "Company Momentum", "suggestion": "..."},
+    {"angle": "Market Position", "suggestion": "..."}
+  ],
   "signals": [
     {
       "category": "BACKGROUND",
@@ -597,7 +724,7 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_orientation", and "signals".
+Return a JSON object with "prior_role", "executive_summary", "executive_orientation", "opening_moves", and "signals".
 EVERY signal must be framed around the person, never the company alone.""")
 
     return "\n".join(lines)
@@ -638,9 +765,23 @@ def _build_dossier_system(request: ResearchRequest, has_person_content: bool) ->
         lines.append("- Never fabricate quotes or attribute statements to the target person")
 
     lines.append("")
-    lines.append("""EVIDENCE & INFERENCE RULES (MANDATORY):
-- Every factual claim must be tied to a cited source (e.g. [VIDEO 1], [ARTICLE 5])
-- If inferring from role context, label: "Inferred from role context"
+    lines.append("""SYNTHESIS QUALITY (MANDATORY):
+- INTERPRET, don't just summarize. Your job is to reveal MEANING behind facts.
+  BAD: "Company grew 25% last year" (just restating a fact)
+  GOOD: "25% growth in 12 months creates execution risk — infrastructure must scale faster than revenue"
+- Every bullet should answer "so what?" — connect facts to pressures, trade-offs, and implications.
+- Cross-reference sources: if VIDEO 1 says X and ARTICLE 3 says Y, synthesize the pattern.
+- Never produce a grocery list of disconnected facts. Weave a narrative about the PERSON.
+
+EVIDENCE & CITATION RULES (MANDATORY):
+- EVERY factual claim MUST include an inline citation: [VIDEO 1], [VIDEO 2], [ARTICLE 3], etc.
+- Citation format: [VIDEO N] for YouTube sources, [ARTICLE N] for article sources
+- N corresponds to the source number in the SOURCE MATERIAL (SOURCE 1 = [VIDEO 1] or [ARTICLE 1])
+- Videos are numbered first (SOURCE 1, 2, ...), then articles continue the sequence
+- So if there are 2 videos: VIDEO 1 = SOURCE 1, VIDEO 2 = SOURCE 2, ARTICLE 3 = SOURCE 3, etc.
+- Place citations at the END of the specific claim they support, not at the end of a paragraph
+- Multiple sources for one claim: [VIDEO 1, ARTICLE 3]
+- If inferring from role context (no source), label: "Inferred from role context"
 - No personality traits unless directly stated in sources
 - Vulnerabilities must be based on: timelines, role transitions, stated priorities,
   competitive context, scaling velocity — NOT psychological speculation
@@ -651,8 +792,9 @@ RECENCY & TENURE WEIGHTING:
 - If executive changed roles within past 12 months, prioritize post-transition content""")
 
     lines.append("")
-    lines.append("""OUTPUT FORMAT (JSON object with 6 sections):
+    lines.append("""OUTPUT FORMAT (JSON object with 7 sections):
 {
+  "pull_quote": "It's to me truly unacceptable that we continue to fund and fuel more when we have yet to solve the practical reality of all of this amazing stuff that we produce isn't sold.",
   "background": [
     "CEO at Flashfood (appointed May 2025, promoted from President & COO)",
     "Joined Flashfood early 2023 as Chief Customer Officer & Chief Brand Officer",
@@ -752,6 +894,14 @@ RECENCY & TENURE WEIGHTING:
 SECTION RULES:
 ═══════════════════════════════════════
 
+0. PULL QUOTE (1 standout direct quote):
+   - The single most revealing, powerful direct quote from the executive
+   - Must be VERBATIM from a video transcript or article (15-40 words)
+   - Choose a quote that reveals their thinking, philosophy, or pressure
+   - This is displayed prominently in the UI — pick the one that makes a sales rep say "now I understand this person"
+   - If no direct quotes exist (company-only search or no interviews), set to null
+   - Do NOT fabricate or paraphrase — verbatim only
+
 1. BACKGROUND (max 6 bullets):
    - Role, prior companies, years of experience
    - Include narrative context (not just resume bullets)
@@ -843,6 +993,7 @@ def _build_dossier_system_low_signal(request: ResearchRequest) -> str:
     lines.append("")
     lines.append("""OUTPUT FORMAT (JSON object — LOW SIGNAL MODE):
 {
+  "pull_quote": null,
   "background": [
     "[Name] serves as [Title] at [Company]",
     "[Any verified background facts from sources]",
@@ -1150,6 +1301,8 @@ async def synthesize(
     prior_role = None
     signals = []
     executive_orientation = None
+    executive_summary = None
+    opening_moves = []
     if isinstance(quick_result, Exception):
         logger.error(f"Gemini Quick Prep error: {quick_result}")
     else:
@@ -1168,6 +1321,19 @@ async def synthesize(
                         role_context=eo_raw.get("role_context", ""),
                         vulnerable=eo_raw.get("vulnerable", ""),
                     )
+
+                # Parse Executive Summary
+                executive_summary = parsed.get("executive_summary") or None
+
+                # Parse Opening Moves
+                raw_moves = parsed.get("opening_moves") or []
+                for move in raw_moves[:3]:
+                    if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
+                        opening_moves.append(OpeningMove(
+                            angle=move["angle"],
+                            suggestion=move["suggestion"],
+                        ))
+
             elif isinstance(parsed, list):
                 raw_signals = parsed
             else:
@@ -1180,6 +1346,7 @@ async def synthesize(
 
     # ── Parse Full Dossier ──
     dossier = None
+    pull_quote = None
     if isinstance(dossier_result, Exception):
         logger.error(f"Gemini Dossier error: {dossier_result}")
     else:
@@ -1187,6 +1354,8 @@ async def synthesize(
             parsed2 = _parse_json_safe(dossier_result.strip())
             if isinstance(parsed2, dict):
                 dossier = _build_dossier(parsed2)
+                # Extract pull quote from dossier response
+                pull_quote = parsed2.get("pull_quote") or None
             else:
                 logger.warning("Dossier call returned non-dict, skipping")
         except Exception as e:
@@ -1222,9 +1391,12 @@ async def synthesize(
             title=request.target_title,
             company=request.target_company,
             prior_role=prior_role,
+            executive_summary=executive_summary,
         ),
         executive_orientation=executive_orientation,
         signals=signals,
+        opening_moves=opening_moves,
+        pull_quote=pull_quote,
         dossier=dossier,
         sources_analyzed={
             "videos": video_count,
