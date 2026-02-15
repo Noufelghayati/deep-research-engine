@@ -63,16 +63,16 @@ async def _step0_podcasts(
     logger.info(f"Step 0: Podcast search for '{request.target_name}'")
     artifacts.steps_attempted.append("step0_podcasts")
 
-    # Search for podcast episodes (Serper first, then direct ListenNotes fallback)
+    # Search for podcast episodes (Serper first, then iTunes fallback)
     candidates, search_method = await search_podcast_episodes(
         request.target_name,
         request.target_company,
         max_results=5,
     )
 
-    method_label = {"serper": "Serper", "direct": "ListenNotes direct search", "none": "Serper"}.get(search_method, search_method)
+    method_label = {"serper": "Serper", "itunes": "iTunes", "none": "search"}.get(search_method, search_method)
     if emit:
-        await emit("log", step="step0", message=f"{method_label} found {len(candidates)} ListenNotes episode(s)")
+        await emit("log", step="step0", message=f"{method_label} found {len(candidates)} podcast episode(s)")
 
     if not candidates:
         if emit:
@@ -95,30 +95,32 @@ async def _step0_podcasts(
             await emit("log", step="step0", message=f"{status} \"{sp.title[:70]}\" = {sp.match_score} [{signals}]")
         await emit("log", step="step0", message=f"Kept {len(kept)} of {len(all_scored)} podcast(s) (threshold \u2265 {settings.disambiguation_threshold})")
 
-    # For each accepted episode: scrape page for audio URL, then transcribe
+    # For each accepted episode: get audio URL + transcribe
     for podcast in kept:
-        # Scrape ListenNotes page for audio URL + metadata
-        if emit:
-            await emit("log", step="step0", message=f"Scraping ListenNotes page for \"{podcast.title[:50]}\"...")
-        scraped = await scrape_episode_page(podcast.url)
-
-        if not scraped or not scraped.get("audio_url"):
+        # iTunes results already have audio URLs; Serper results need scraping
+        if not podcast.audio_url:
+            # Scrape ListenNotes page for audio URL + metadata
             if emit:
-                await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\"")
-            # Still add to artifacts (without transcript)
-            artifacts.podcasts.append(podcast)
-            continue
+                await emit("log", step="step0", message=f"Scraping episode page for \"{podcast.title[:50]}\"...")
+            scraped = await scrape_episode_page(podcast.url)
 
-        # Update podcast with scraped metadata
-        podcast.audio_url = scraped["audio_url"]
-        if scraped.get("audio_length_sec"):
-            podcast.audio_length_sec = scraped["audio_length_sec"]
-        if scraped.get("podcast_name") and not podcast.podcast_title:
-            podcast.podcast_title = scraped["podcast_name"]
-        if scraped.get("published_date") and not podcast.published_at:
-            podcast.published_at = scraped["published_date"]
-        if scraped.get("title") and not podcast.title:
-            podcast.title = scraped["title"]
+            if not scraped or not scraped.get("audio_url"):
+                if emit:
+                    await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\"")
+                # Still add to artifacts (without transcript)
+                artifacts.podcasts.append(podcast)
+                continue
+
+            # Update podcast with scraped metadata
+            podcast.audio_url = scraped["audio_url"]
+            if scraped.get("audio_length_sec"):
+                podcast.audio_length_sec = scraped["audio_length_sec"]
+            if scraped.get("podcast_name") and not podcast.podcast_title:
+                podcast.podcast_title = scraped["podcast_name"]
+            if scraped.get("published_date") and not podcast.published_at:
+                podcast.published_at = scraped["published_date"]
+            if scraped.get("title") and not podcast.title:
+                podcast.title = scraped["title"]
 
         # Add to artifacts BEFORE transcript fetch so timeout won't lose it
         artifacts.podcasts.append(podcast)
