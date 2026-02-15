@@ -1,6 +1,6 @@
 import re
 from typing import List, Optional, Tuple
-from models.internal import YouTubeCandidate, ScoredVideo
+from models.internal import YouTubeCandidate, ScoredVideo, PodcastCandidate, ScoredPodcast
 from services.youtube_transcript import fetch_transcript
 from config import settings
 import logging
@@ -218,6 +218,118 @@ async def score_and_filter(
 
     logger.info(
         f"Disambiguation: {len(candidates)} candidates -> "
+        f"{len(passed)} passed threshold -> keeping {len(kept)}"
+    )
+    return kept, all_scored
+
+
+# ---------------------------------------------------------------------------
+# Podcast scoring (reuses same helpers)
+# ---------------------------------------------------------------------------
+
+def score_podcast_candidate(
+    candidate: PodcastCandidate,
+    person_name: Optional[str],
+    company_name: str,
+) -> ScoredPodcast:
+    """
+    Score a podcast candidate for company/person relevance.
+
+    Scoring rubric (0.0 to 1.0):
+      Company in title:        +0.30
+      Person in title:         +0.25
+      Company in description:  +0.15
+      Person in description:   +0.10
+      Podcast name matches:    +0.10
+      C-suite title bonus:     +0.01 to +0.10
+    """
+    score = 0.0
+    signals = []
+    strong_variants, weak_variants = _company_variants(company_name)
+
+    # Title signals
+    title_strong = _count_strong_mentions(candidate.title, strong_variants)
+    title_weak = _count_weak_mentions(candidate.title, weak_variants)
+    if title_strong > 0:
+        score += 0.30
+        signals.append("title")
+    elif title_weak > 0:
+        score += 0.05
+        signals.append("title_weak")
+
+    is_person_match = False
+    if _person_mentioned(candidate.title, person_name):
+        score += 0.25
+        signals.append("person_in_title")
+        is_person_match = True
+
+    # Description signals
+    desc_strong = _count_strong_mentions(candidate.description, strong_variants)
+    desc_weak = _count_weak_mentions(candidate.description, weak_variants)
+    if desc_strong > 0:
+        score += 0.15
+        signals.append("description")
+    elif desc_weak > 0:
+        score += 0.03
+        signals.append("description_weak")
+
+    if _person_mentioned(candidate.description, person_name):
+        score += 0.10
+        signals.append("person_in_description")
+        is_person_match = True
+
+    # Podcast show name signal
+    if candidate.podcast_title:
+        show_strong = _count_strong_mentions(candidate.podcast_title, strong_variants)
+        if show_strong > 0:
+            score += 0.10
+            signals.append("podcast_matches_company")
+
+    # C-suite title bonus
+    title_bonus, title_signal = _csuite_title_bonus(candidate.title)
+    if title_bonus > 0:
+        score += title_bonus
+        signals.append(title_signal)
+
+    scored = ScoredPodcast(
+        episode_id=candidate.episode_id,
+        title=candidate.title,
+        description=candidate.description,
+        podcast_title=candidate.podcast_title,
+        published_at=candidate.published_at,
+        audio_url=candidate.audio_url,
+        audio_length_sec=candidate.audio_length_sec,
+        match_score=round(min(score, 1.0), 2),
+        match_signals=signals,
+        is_person_match=is_person_match,
+        url=candidate.link,
+    )
+
+    logger.info(
+        f"Scored podcast '{candidate.title[:50]}': {scored.match_score} "
+        f"signals={signals} person={is_person_match}"
+    )
+    return scored
+
+
+def score_and_filter_podcasts(
+    candidates: List[PodcastCandidate],
+    person_name: Optional[str],
+    company_name: str,
+    max_keep: int = 2,
+) -> Tuple[List[ScoredPodcast], List[ScoredPodcast]]:
+    """Score all podcast candidates, filter by threshold. Returns (kept, all_scored)."""
+    all_scored = []
+    for c in candidates:
+        sp = score_podcast_candidate(c, person_name, company_name)
+        all_scored.append(sp)
+
+    passed = [s for s in all_scored if s.match_score >= settings.disambiguation_threshold]
+    passed.sort(key=lambda x: x.match_score, reverse=True)
+    kept = passed[:max_keep]
+
+    logger.info(
+        f"Podcast disambiguation: {len(candidates)} candidates -> "
         f"{len(passed)} passed threshold -> keeping {len(kept)}"
     )
     return kept, all_scored

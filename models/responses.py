@@ -25,7 +25,7 @@ CATEGORY_ICONS = {
 
 
 class SignalSource(BaseModel):
-    type: str = Field(description="'video' or 'article'")
+    type: str = Field(description="'podcast', 'video', or 'article'")
     title: str = ""
     url: str = ""
     timestamp: Optional[str] = Field(None, description="MM:SS for videos")

@@ -5,8 +5,9 @@ from models.internal import CollectedArtifacts, ScoredVideo
 from models.responses import ResearchResponse
 from services.youtube_search import search_youtube
 from services.youtube_transcript import fetch_transcript
-from services.disambiguation import score_and_filter
+from services.disambiguation import score_and_filter, score_and_filter_podcasts
 from services.article_fetcher import search_and_fetch_articles
+from services.podcast_search import search_podcast_episodes, scrape_episode_page, fetch_podcast_transcript
 from services.synthesis import synthesize
 from config import settings
 import asyncio
@@ -30,6 +31,116 @@ def _compute_result_strength(videos: List[ScoredVideo]) -> float:
 
     max_possible = settings.max_youtube_artifacts * 1.0
     return min(total / max_possible, 1.0)
+
+
+async def _step0_podcasts(
+    request: ResearchRequest,
+    artifacts: CollectedArtifacts,
+    emit=None,
+) -> None:
+    """
+    Step 0: Podcast episode discovery via Serper + ListenNotes scraping.
+    Skipped if no webshare proxy or no target_name.
+    """
+    if not settings.webshare_proxy_url:
+        logger.info("Step 0 skipped: no Webshare proxy configured")
+        if emit:
+            await emit("log", step="step0", message="Skipped: no proxy configured")
+        return
+
+    if not request.target_name:
+        logger.info("Step 0 skipped: no target_name")
+        if emit:
+            await emit("log", step="step0", message="Skipped: no target name")
+        return
+
+    if not settings.serper_api_key:
+        logger.info("Step 0 skipped: no Serper API key")
+        if emit:
+            await emit("log", step="step0", message="Skipped: no Serper API key")
+        return
+
+    logger.info(f"Step 0: Podcast search for '{request.target_name}'")
+    artifacts.steps_attempted.append("step0_podcasts")
+
+    # Search for podcast episodes via Serper
+    candidates = await search_podcast_episodes(
+        request.target_name,
+        request.target_company,
+        max_results=5,
+    )
+
+    if emit:
+        await emit("log", step="step0", message=f"Serper found {len(candidates)} ListenNotes episode(s)")
+
+    if not candidates:
+        if emit:
+            await emit("log", step="step0", message="No podcast episodes found")
+        return
+
+    # Score and filter candidates
+    kept, all_scored = score_and_filter_podcasts(
+        candidates,
+        request.target_name,
+        request.target_company,
+        max_keep=settings.max_podcast_artifacts,
+    )
+
+    if emit:
+        for sp in all_scored:
+            passed = sp.match_score >= settings.disambiguation_threshold
+            status = "\u2713" if passed else "\u2717"
+            signals = ", ".join(sp.match_signals) if sp.match_signals else "none"
+            await emit("log", step="step0", message=f"{status} \"{sp.title[:70]}\" = {sp.match_score} [{signals}]")
+        await emit("log", step="step0", message=f"Kept {len(kept)} of {len(all_scored)} podcast(s) (threshold \u2265 {settings.disambiguation_threshold})")
+
+    # For each accepted episode: scrape page for audio URL, then transcribe
+    for podcast in kept:
+        # Scrape ListenNotes page for audio URL + metadata
+        if emit:
+            await emit("log", step="step0", message=f"Scraping ListenNotes page for \"{podcast.title[:50]}\"...")
+        scraped = await scrape_episode_page(podcast.url)
+
+        if not scraped or not scraped.get("audio_url"):
+            if emit:
+                await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\"")
+            # Still add to artifacts (without transcript)
+            artifacts.podcasts.append(podcast)
+            continue
+
+        # Update podcast with scraped metadata
+        podcast.audio_url = scraped["audio_url"]
+        if scraped.get("audio_length_sec"):
+            podcast.audio_length_sec = scraped["audio_length_sec"]
+        if scraped.get("podcast_name") and not podcast.podcast_title:
+            podcast.podcast_title = scraped["podcast_name"]
+        if scraped.get("published_date") and not podcast.published_at:
+            podcast.published_at = scraped["published_date"]
+        if scraped.get("title") and not podcast.title:
+            podcast.title = scraped["title"]
+
+        # Add to artifacts BEFORE transcript fetch so timeout won't lose it
+        artifacts.podcasts.append(podcast)
+
+        # Transcribe audio
+        if emit:
+            await emit("log", step="step0", message=f"Transcribing podcast audio for \"{podcast.title[:50]}\"...")
+
+            async def _on_log_s0(msg):
+                await emit("log", step="step0", message=f"  {msg}")
+
+            text, available = await fetch_podcast_transcript(
+                podcast.audio_url, podcast.episode_id, on_log=_on_log_s0,
+            )
+        else:
+            text, available = await fetch_podcast_transcript(
+                podcast.audio_url, podcast.episode_id,
+            )
+
+        podcast.transcript_text = text
+        podcast.transcript_available = available
+
+    logger.info(f"Step 0 result: {len(artifacts.podcasts)} podcast(s)")
 
 
 async def _step1_person_youtube(
@@ -239,7 +350,7 @@ async def _step3_articles(
 async def run_research(request: ResearchRequest, on_progress=None) -> ResearchResponse:
     """
     Execute the full research pipeline:
-      Step 1 (person YouTube) -> Step 2 (company fallback) -> Step 3 (articles) -> Synthesis
+      Step 0 (podcasts) -> Step 1 (person YouTube) -> Step 2 (company fallback) -> Step 3 (articles) -> Synthesis
     Enforces pipeline_timeout_sec. Tracks boring-VP and common-name edge cases.
     """
     pipeline_start = time.time()
@@ -265,13 +376,33 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     def _time_left():
         return max(0, settings.pipeline_timeout_sec - _elapsed())
 
+    # ── Step 0: Podcast Search ──
+    await emit("step", step="step0", status="searching", message="Searching for podcast episodes...")
+    try:
+        await asyncio.wait_for(
+            _step0_podcasts(request, artifacts, emit=_emit),
+            timeout=_time_left(),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Pipeline timeout during step 0 (podcasts) at {_elapsed():.1f}s")
+        timed_out = True
+        warnings.append("Partial research \u2014 showing available signals")
+
+    for p in artifacts.podcasts:
+        await emit("found", kind="podcast", title=p.title, score=round(p.match_score, 2))
+    if artifacts.podcasts:
+        await emit("step", step="step0", status="done", message=f"Found {len(artifacts.podcasts)} podcast episode(s)")
+    else:
+        await emit("step", step="step0", status="done", message="No podcast episodes found")
+
     # ── Step 1: Person-level YouTube ──
-    await emit("step", step="step1", status="searching", message="Searching for person videos and podcasts...")
+    if not timed_out:
+        await emit("step", step="step1", status="searching", message="Searching for person videos...")
     try:
         step1_strength = await asyncio.wait_for(
             _step1_person_youtube(request, artifacts, emit=_emit),
             timeout=_time_left(),
-        )
+        ) if not timed_out else 0.0
     except asyncio.TimeoutError:
         logger.warning(f"Pipeline timeout during step 1 at {_elapsed():.1f}s")
         step1_strength = 0.0
@@ -302,7 +433,8 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         await emit("step", step="step2", status="done", message=f"Found {len(new_videos)} leadership video(s)")
 
     # Detect "boring VP" — no person-level interviews found
-    has_person_content = person_video_count > 0
+    person_podcast_count = sum(1 for p in artifacts.podcasts if p.is_person_match)
+    has_person_content = person_video_count > 0 or person_podcast_count > 0
     if not has_person_content and request.target_name:
         warnings.append("No direct interviews found \u2014 signals derived from company-level sources and role context")
 
@@ -327,14 +459,21 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
 
     # ── Synthesis ──
     await emit("step", step="synthesis", status="running", message="Synthesizing intelligence...")
+    podcast_count = len(artifacts.podcasts)
     video_count = len(artifacts.videos)
     article_count = len(artifacts.articles)
     transcript_count = sum(1 for v in artifacts.videos if v.transcript_available)
+    podcast_transcript_count = sum(1 for p in artifacts.podcasts if p.transcript_available)
     if on_progress:
-        await emit("log", step="synthesis", message=f"Analyzing {video_count} video(s) ({transcript_count} with transcripts) + {article_count} article(s)...")
+        parts = []
+        if podcast_count:
+            parts.append(f"{podcast_count} podcast(s) ({podcast_transcript_count} transcribed)")
+        parts.append(f"{video_count} video(s) ({transcript_count} with transcripts)")
+        parts.append(f"{article_count} article(s)")
+        await emit("log", step="synthesis", message=f"Analyzing {' + '.join(parts)}...")
 
     logger.info(
-        f"Synthesis: {video_count} videos, "
+        f"Synthesis: {podcast_count} podcasts, {video_count} videos, "
         f"{article_count} articles, "
         f"steps={artifacts.steps_attempted}"
     )
@@ -353,5 +492,5 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     await emit("step", step="synthesis", status="done", message=f"Found {signal_count} signal{'s' if signal_count != 1 else ''}")
 
     elapsed = round(_elapsed(), 1)
-    logger.info(f"Pipeline completed in {elapsed}s: {signal_count} signals, {video_count} videos, {article_count} articles")
+    logger.info(f"Pipeline completed in {elapsed}s: {signal_count} signals, {podcast_count} podcasts, {video_count} videos, {article_count} articles")
     return response

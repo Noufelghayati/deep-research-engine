@@ -41,11 +41,40 @@ CATEGORY_PRIORITY = ["GROWTH", "CHALLENGE", "MARKET", "PRODUCT", "TENSION", "TRA
 # ═══════════════════════════════════════════════════════════
 
 def _build_source_material(artifacts: CollectedArtifacts) -> str:
-    """Build the source material block shared by both prompts."""
-    sections = []
+    """Build the source material block shared by both prompts.
 
-    for i, video in enumerate(artifacts.videos, 1):
-        section = f"=== SOURCE {i}: YouTube Video ===\n"
+    Source numbering: PODCAST 1, 2... → VIDEO N+1... → ARTICLE M+1...
+    """
+    sections = []
+    source_num = 0
+
+    # Podcasts first
+    for podcast in artifacts.podcasts:
+        source_num += 1
+        section = f"=== SOURCE {source_num}: Podcast Episode ===\n"
+        section += f"Title: {podcast.title}\n"
+        if podcast.podcast_title:
+            section += f"Podcast: {podcast.podcast_title}\n"
+        section += f"URL: {podcast.url}\n"
+        if podcast.published_at:
+            section += f"Published: {podcast.published_at}\n"
+        if podcast.is_person_match:
+            section += "Match type: PERSON-LEVEL (features the target person)\n"
+        else:
+            section += "Match type: COMPANY-LEVEL (features company leadership)\n"
+        if podcast.transcript_text:
+            section += f"Transcript:\n{podcast.transcript_text}\n"
+        else:
+            section += (
+                "[No transcript available. Use title and description only.]\n"
+                f"Description: {podcast.description}\n"
+            )
+        sections.append(section)
+
+    # Then videos
+    for video in artifacts.videos:
+        source_num += 1
+        section = f"=== SOURCE {source_num}: YouTube Video ===\n"
         section += f"Title: {video.title}\n"
         section += f"Channel: {video.channel_title}\n"
         section += f"URL: {video.url}\n"
@@ -63,8 +92,10 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
             )
         sections.append(section)
 
-    for i, article in enumerate(artifacts.articles, len(artifacts.videos) + 1):
-        section = f"=== SOURCE {i}: Article ===\n"
+    # Then articles
+    for article in artifacts.articles:
+        source_num += 1
+        section = f"=== SOURCE {source_num}: Article ===\n"
         section += f"Title: {article.title}\n"
         section += f"URL: {article.url}\n"
         section += f"Content:\n{article.text}\n"
@@ -241,10 +272,16 @@ def _compute_research_confidence(
     now = datetime.now()
     six_months_ago = now - timedelta(days=180)
 
-    direct_interviews = sum(1 for v in artifacts.videos if v.is_person_match)
-    total_sources = len(artifacts.videos) + len(artifacts.articles)
+    podcast_person_matches = sum(1 for p in artifacts.podcasts if p.is_person_match)
+    video_person_matches = sum(1 for v in artifacts.videos if v.is_person_match)
+    direct_interviews = podcast_person_matches + video_person_matches
+    total_sources = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
 
     recent_count = 0
+    for p in artifacts.podcasts:
+        dt = _parse_date_lenient(p.published_at)
+        if dt and dt >= six_months_ago:
+            recent_count += 1
     for v in artifacts.videos:
         dt = _parse_date_lenient(v.published_at)
         if dt and dt >= six_months_ago:
@@ -265,6 +302,10 @@ def _compute_research_confidence(
         reasons.append(f"{recent_count} source{'s' if recent_count != 1 else ''} from the past 6 months")
     else:
         reasons.append("No recent sources (past 6 months)")
+
+    if len(artifacts.podcasts) > 0:
+        with_transcript = sum(1 for p in artifacts.podcasts if p.transcript_available)
+        reasons.append(f"{with_transcript}/{len(artifacts.podcasts)} podcasts transcribed")
 
     if len(artifacts.videos) > 0:
         with_transcript = sum(1 for v in artifacts.videos if v.transcript_available)
@@ -313,7 +354,12 @@ def _assess_signal_strength(
         1 for v in artifacts.videos
         if v.is_person_match and v.transcript_available
     )
+    direct_interviews += sum(
+        1 for p in artifacts.podcasts
+        if p.is_person_match and p.transcript_available
+    )
     person_match_videos = sum(1 for v in artifacts.videos if v.is_person_match)
+    person_match_podcasts = sum(1 for p in artifacts.podcasts if p.is_person_match)
 
     # Check if person is mentioned substantively in articles
     person_name_lower = request.target_name.lower()
@@ -324,7 +370,7 @@ def _assess_signal_strength(
 
     if direct_interviews >= 1:
         return "strong"
-    elif person_match_videos >= 1 or person_articles >= 2:
+    elif person_match_videos >= 1 or person_match_podcasts >= 1 or person_articles >= 2:
         return "moderate"
     else:
         return "low"
@@ -461,7 +507,7 @@ CRITICAL RULES:
 5. Max 25 words per signal. Each signal must be a different dimension.
 6. Each quote must be 15-40 words from source material.
 7. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source.
-8. Include source title, URL, date, and timestamp (MM:SS) for videos.
+8. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts.
 
 WHAT TO LOOK FOR IN SOURCES:
 - Pressure signals: "needs to prove...", "must demonstrate...", timeline pressure
@@ -549,7 +595,7 @@ OUTPUT FORMAT (JSON object):
       "signal": "Aggressive 25% expansion (2,000→2,500 by EOY) despite 8 months as CEO — high risk/reward growth posture with execution exposure",
       "quote": "It's over 2,000 and on any given day probably getting closer to 2,500... there's a lot more growth happening this year.",
       "source": {
-        "type": "video",
+        "type": "video",  // "podcast", "video", or "article"
         "title": "Jordan Schenck CEO Interview",
         "url": "https://youtube.com/watch?v=abgKopCIDOY",
         "timestamp": "08:30",
@@ -774,11 +820,11 @@ def _build_dossier_system(request: ResearchRequest, has_person_content: bool) ->
 - Never produce a grocery list of disconnected facts. Weave a narrative about the PERSON.
 
 EVIDENCE & CITATION RULES (MANDATORY):
-- EVERY factual claim MUST include an inline citation: [VIDEO 1], [VIDEO 2], [ARTICLE 3], etc.
-- Citation format: [VIDEO N] for YouTube sources, [ARTICLE N] for article sources
-- N corresponds to the source number in the SOURCE MATERIAL (SOURCE 1 = [VIDEO 1] or [ARTICLE 1])
-- Videos are numbered first (SOURCE 1, 2, ...), then articles continue the sequence
-- So if there are 2 videos: VIDEO 1 = SOURCE 1, VIDEO 2 = SOURCE 2, ARTICLE 3 = SOURCE 3, etc.
+- EVERY factual claim MUST include an inline citation: [PODCAST 1], [VIDEO 2], [ARTICLE 4], etc.
+- Citation format: [PODCAST N] for podcast sources, [VIDEO N] for YouTube sources, [ARTICLE N] for article sources
+- N corresponds to the source number in the SOURCE MATERIAL
+- Sources are numbered: podcasts first, then videos, then articles (continuous sequence)
+- So if there are 1 podcast and 2 videos: PODCAST 1 = SOURCE 1, VIDEO 2 = SOURCE 2, VIDEO 3 = SOURCE 3, ARTICLE 4 = SOURCE 4, etc.
 - Place citations at the END of the specific claim they support, not at the end of a paragraph
 - Multiple sources for one claim: [VIDEO 1, ARTICLE 3]
 - If inferring from role context (no source), label: "Inferred from role context"
@@ -958,8 +1004,8 @@ SECTION RULES:
 
 6. SOURCES (all sources used):
    - type: "primary" (person interviews) or "supporting" (company/press)
-   - icon: 📹 for video, 📄 for article
-   - Include title, platform, date, duration (video only), url""")
+   - icon: 🎧 for podcast, 📹 for video, 📄 for article
+   - Include title, platform, date, duration (video/podcast only), url""")
 
     return "\n".join(lines)
 
@@ -1086,7 +1132,7 @@ SECTION RULES (LOW SIGNAL MODE):
 6. SOURCES:
    - List all sources used
    - Mark ALL as "supporting" (none are "primary" without direct interviews)
-   - icon: 📄 for articles, 📹 for videos""")
+   - icon: 🎧 for podcasts, 📹 for videos, 📄 for articles""")
 
     return "\n".join(lines)
 
@@ -1265,6 +1311,7 @@ async def synthesize(
     logger.info(
         f"Person signal strength: {signal_strength} "
         f"(has_person_content={has_person_content}, "
+        f"podcasts={len(artifacts.podcasts)}, "
         f"videos={len(artifacts.videos)}, articles={len(artifacts.articles)})"
     )
 
@@ -1374,7 +1421,7 @@ async def synthesize(
                 "Validate key assumptions in conversation."
             )
         else:
-            strong_sources = sum(1 for v in artifacts.videos if v.is_person_match) + len(artifacts.articles)
+            strong_sources = sum(1 for p in artifacts.podcasts if p.is_person_match) + sum(1 for v in artifacts.videos if v.is_person_match) + len(artifacts.articles)
             if strong_sources < 2:
                 dossier.thin_signal_warning = (
                     "Limited public executive signal. "
@@ -1382,6 +1429,7 @@ async def synthesize(
                 )
 
     # ── Build response ──
+    podcast_count = len(artifacts.podcasts)
     video_count = len(artifacts.videos)
     article_count = len(artifacts.articles)
 
@@ -1399,13 +1447,18 @@ async def synthesize(
         pull_quote=pull_quote,
         dossier=dossier,
         sources_analyzed={
+            "podcasts": podcast_count,
             "videos": video_count,
             "articles": article_count,
         },
         metadata={
             "steps_attempted": artifacts.steps_attempted,
+            "total_podcasts": podcast_count,
             "total_videos": video_count,
             "total_articles": article_count,
+            "podcasts_with_transcripts": sum(
+                1 for p in artifacts.podcasts if p.transcript_available
+            ),
             "videos_with_transcripts": sum(
                 1 for v in artifacts.videos if v.transcript_available
             ),

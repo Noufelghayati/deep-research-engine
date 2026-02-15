@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     max_transcription_duration_sec: int = 1500  # 25 min cap per video
     pipeline_timeout_sec: int = 100  # generous budget; articles always run even after timeout
     youtube_search_max_results: int = 5
+    max_podcast_artifacts: int = 2  # keep low; podcast transcription is slow
+    max_podcast_audio_duration_sec: int = 1800  # 30 min cap per episode
 
     # Gemini settings
     gemini_model: str = "gemini-2.5-flash"
