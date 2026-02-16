@@ -1326,12 +1326,14 @@ async def synthesize(
     artifacts: CollectedArtifacts,
     request: ResearchRequest,
     has_person_content: bool = True,
+    on_partial=None,
 ) -> ResearchResponse:
     """
-    Two-pass Gemini synthesis:
+    Two-pass Gemini synthesis with progressive streaming:
       Call 1: Quick Prep signals + Executive Orientation
       Call 2: Full Dossier (6 sections)
-    Both calls receive the same source material.
+    Both calls start in parallel. Quick Prep emits as soon as ready
+    via on_partial callback, before Dossier finishes.
     """
     source_material = _build_source_material(artifacts)
     loop = asyncio.get_event_loop()
@@ -1357,7 +1359,7 @@ async def synthesize(
     quick_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
     dossier_content = f"Build a full executive intelligence dossier from these sources:\n\n{source_material}"
 
-    # ── Run both Gemini calls in parallel ──
+    # ── Run both Gemini calls in parallel, emit Quick Prep first ──
     async def _run_quick_prep():
         return await loop.run_in_executor(
             None, _call_gemini_sync, quick_system, quick_content
@@ -1368,11 +1370,14 @@ async def synthesize(
             None, _call_gemini_sync, dossier_system, dossier_content
         )
 
-    quick_result, dossier_result = await asyncio.gather(
-        _run_quick_prep(),
-        _run_dossier(),
-        return_exceptions=True,
-    )
+    quick_task = asyncio.create_task(_run_quick_prep())
+    dossier_task = asyncio.create_task(_run_dossier())
+
+    # Await Quick Prep first (Dossier continues running in background)
+    try:
+        quick_result = await quick_task
+    except Exception as e:
+        quick_result = e
 
     # ── Parse Quick Prep ──
     prior_role = None
@@ -1420,6 +1425,40 @@ async def synthesize(
                 sig.id = i
         except Exception as e:
             logger.error(f"Quick Prep parse error: {e}")
+
+    # ── Emit Quick Prep partial (progressive streaming) ──
+    if on_partial and (signals or executive_orientation):
+        try:
+            partial_data = {
+                "person": {
+                    "name": request.target_name,
+                    "title": request.target_title,
+                    "company": request.target_company,
+                    "prior_role": prior_role,
+                    "executive_summary": executive_summary,
+                },
+                "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+                "signals": [s.model_dump() for s in signals],
+                "opening_moves": [m.model_dump() for m in opening_moves],
+                "pull_quote": None,
+                "dossier": None,
+                "warnings": [],
+                "sources_analyzed": {
+                    "podcasts": len(artifacts.podcasts),
+                    "videos": len(artifacts.videos),
+                    "articles": len(artifacts.articles),
+                },
+            }
+            await on_partial("quick_prep", partial_data)
+            logger.info("Emitted Quick Prep partial result")
+        except Exception as e:
+            logger.warning(f"Failed to emit Quick Prep partial: {e}")
+
+    # ── Await Full Dossier (may already be done) ──
+    try:
+        dossier_result = await dossier_task
+    except Exception as e:
+        dossier_result = e
 
     # ── Parse Full Dossier ──
     dossier = None

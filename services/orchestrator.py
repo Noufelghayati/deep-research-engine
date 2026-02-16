@@ -478,6 +478,35 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         )
         await emit("step", step="extraction", status="done", message=f"Extracted {total_signals} signal(s) from {total_sources} source(s)")
 
+    # ── Emit source list for early citation linking ──
+    source_list = []
+    src_num = 0
+    for p in artifacts.podcasts:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "podcast",
+            "title": p.title, "url": p.url,
+            "platform": p.podcast_title or "Podcast",
+            "date": p.published_at or "",
+        })
+    for v in artifacts.videos:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "video",
+            "title": v.title, "url": v.url,
+            "platform": v.channel_title or "YouTube",
+            "date": v.published_at or "",
+        })
+    for a in artifacts.articles:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "article",
+            "title": a.title, "url": a.url,
+            "platform": "", "date": a.published_date or "",
+        })
+    if source_list:
+        await emit("sources", sources=source_list)
+
     # ── Synthesis ──
     await emit("step", step="synthesis", status="running", message="Synthesizing intelligence...")
     podcast_count = len(artifacts.podcasts)
@@ -500,10 +529,14 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     )
     artifacts.steps_attempted.append("synthesis")
 
+    async def _on_partial(section, data):
+        await emit("partial", section=section, data=data)
+
     response = await synthesize(
         artifacts,
         request,
         has_person_content=has_person_content,
+        on_partial=_on_partial if on_progress else None,
     )
 
     # Attach warnings
