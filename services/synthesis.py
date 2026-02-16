@@ -7,6 +7,7 @@ from models.responses import (
     PersonInfo,
     Signal,
     OpeningMove,
+    RecentMove,
     FullDossier,
     DossierBackground,
     DossierStrategicFocus,
@@ -451,43 +452,38 @@ def _build_quick_prep_system(request: ResearchRequest, has_person_content: bool)
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 1: EXECUTIVE ORIENTATION (4 lines)
+PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
 ═══════════════════════════════════════
 
-Synthesize a 4-line Executive Orientation that reveals how this person thinks and operates.
+Generate 3-5 Lead Orientation bullets. Each bullet MUST:
+- Represent a DIFFERENT strategic dimension (from: capital allocation, product strategy,
+  market posture, execution risk, leadership bias, org maturity, competitive positioning, talent strategy)
+- Be grounded in explicit evidence from sources
+- Avoid repetition or paraphrasing of prior bullets
+- Convert fact → implication (surface pressure or strategic tension)
 
-LINE 1 — GROWTH POSTURE: What is their orientation toward growth vs efficiency?
-  Write naturally based on evidence. Examples:
-  ✓ "Aggressive expansion leader in proof-of-scale phase"
-  ✓ "Efficiency-focused operator consolidating after rapid growth"
-  ✗ Avoid generic: "growth-minded" or "results-driven"
+If there is insufficient evidence for a dimension, omit it. Never fabricate.
 
-LINE 2 — FUNCTIONAL BIAS & TENSION: What is their primary lens? What are they balancing?
-  ✓ "Marketing-led operator balancing impact narrative with commercial viability"
-  ✓ "Product-obsessed builder managing tension between quality and speed"
-  ✗ Avoid: "strategic leader focused on growth and innovation"
+Examples:
+✓ "Fresh $15M capital signals aggressive 18-month expansion timeline — burn rate pressure rising"
+✓ "Product-first operator prioritizing AI/ML features over enterprise sales motions"
+✓ "Enterprise bet: Kroger pilot is make-or-break validation for platform viability"
+✓ "Org maturity gap: founder-led culture hitting scaling limits as headcount doubles"
+✗ Avoid restating the same insight in different words across bullets
 
-LINE 3 — ROLE CONTEXT: How long in role? What inflection point? Where placing bets?
-  ✓ "New CEO (8 months) investing in product quality during rapid scaling"
-  ✓ "Long-tenured founder (10 years) shifting from growth to profitability"
+Then add ONE Key Pressure line: the single most important pressure or vulnerability
+this person faces, grounded in evidence. Cite the source if possible.
 
-LINE 4 — VULNERABILITY (MANDATORY, must be EVIDENCE-BASED):
-  - ONLY include vulnerabilities supported by evidence from sources
-  - Cite the specific evidence: timelines, role transitions, stated priorities, competitive context
-  - If strong evidence: "Vulnerable: [specific pressure with evidence]"
-  - If limited evidence: "Limited direct signal — role-typical exposures include [role-based pressures]"
-  ✓ "Vulnerable: Execution risk from 25% store growth in 12 months, retailer ROI pressure [VIDEO 1]"
-  ✓ "Vulnerable: Platform stability during 3x growth, accumulating technical debt [ARTICLE 3]"
-  ✗ NEVER speculate on vulnerabilities without evidence from sources
-  ✗ NEVER present company challenges as personal vulnerabilities without connecting to the person
+Example Key Pressure:
+✓ "Execution risk from 25% store growth in 12 months with unproven enterprise infrastructure [VIDEO 1]"
+✓ "Regulatory uncertainty: FCC drone policy shifts could stall core business expansion [PODCAST 1]"
 
 RULES:
-- Base everything on evidence from sources (don't speculate)
-- Be specific (not "focused on growth" but "25% expansion in 12 months")
-- Show tension and trade-offs
-- If evidence is thin: "Limited public signal — appears to be..."
-- For company-only searches (no person): orient around the company's leadership posture
-- NEVER fabricate psychology or decision patterns without direct signal""")
+- Each bullet: one concise sentence, max 20 words
+- No two bullets may address the same strategic dimension
+- Key Pressure: evidence-based, cite source when possible
+- If evidence is thin: "Limited direct signal — role-typical pressures include [X]"
+- NEVER fabricate or speculate without evidence""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -547,59 +543,86 @@ WHAT TO LOOK FOR IN SOURCES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SUMMARY (2-3 sentences)
+PART 2.5: PULL QUOTE (1 standout direct quote)
 ═══════════════════════════════════════
 
-Write a concise 2-3 sentence executive summary that captures:
-- Who this person is and their current role context
-- Their primary strategic focus or what defines their leadership right now
-- The key tension or pressure they're navigating
-
-This appears directly under the person's name/title in the Quick Prep header.
-It should give a sales rep instant context before reading signals.
-
-Example:
-"Jordan Schenck is an impact-driven CEO navigating Flashfood's transition from startup to enterprise scale.
-She's betting on aggressive retail expansion (25% store growth) while maintaining a triple-bottom-line narrative.
-The core tension: proving commercial viability fast enough to justify the growth trajectory."
+Select the single most revealing, powerful direct quote from the executive.
+This is the "wow" moment — displayed prominently at the top of the report.
 
 RULES:
-- Write in third person
-- Be specific (numbers, timelines, named pressures)
-- Show the central tension or trade-off
-- Do NOT repeat the orientation lines verbatim""")
+- Must be VERBATIM from a video transcript or podcast transcript (15-40 words)
+- Choose a quote that reveals their thinking, philosophy, values, or pressure
+- Pick quotes where the person speaks with conviction or candor — not generic platitudes
+- Include the source as: "Source Title - Platform - Date - Timestamp"
+- If no direct quotes exist in the source material, return null
+
+Output: {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS"}
+or null if no direct quotes available.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 4: OPENING MOVES (3 conversation starters)
+PART 3: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
 ═══════════════════════════════════════
 
-Generate exactly 3 conversation opening suggestions for the sales rep.
-Each move has an "angle" (2-4 word label) and a "suggestion" (1-2 sentence opener).
+Write ONE punchy sentence that captures the executive's current posture in context.
+This appears directly under their name/title — a sales rep glances at it in 2 seconds.
 
-These should be smart, insight-led openers — NOT generic small talk.
-Each should reference a specific signal or pressure from the research.
+Format: "[Role-descriptor] [doing what] [in what context/tension]"
 
-Example:
-{
-  "angle": "Scaling Pain",
-  "suggestion": "Your 25% store expansion this year is aggressive — how are you thinking about operational infrastructure keeping pace?"
-}
-{
-  "angle": "Enterprise Bet",
-  "suggestion": "The Kroger pilot feels like a make-or-break proof point. What does success look like for that partnership?"
-}
-{
-  "angle": "Mission vs. Margin",
-  "suggestion": "You've talked about the triple bottom line — how do you handle board conversations when impact and margin compete?"
-}
+Examples:
+✓ "Founder-CEO reinvesting break-even earnings into an aggressive AI/robotics pivot."
+✓ "New CEO (8 months) betting on aggressive retail expansion while proving enterprise viability."
+✓ "Product-first CTO scaling from startup to platform — managing technical debt vs feature velocity."
 
 RULES:
-- Each angle must target a DIFFERENT dimension (don't repeat themes)
-- Reference specific facts/signals from the research
-- Frame as genuine curiosity, not sales pitch
-- Make the exec think "this person did their homework"
-- 1-2 sentences per suggestion, conversational tone""")
+- ONE sentence only, maximum 25 words
+- Skip the person's name (it's already shown above)
+- Lead with their strategic posture, not their biography
+- Include the core tension or trade-off if possible
+- Do NOT repeat orientation lines verbatim""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 4: RECENT MOVES (last 90 days, max 4 events)
+═══════════════════════════════════════
+
+Identify up to 4 concrete, factual events involving this person or their company
+from the LAST 90 DAYS. These must be real events with specific dates found in sources.
+
+Examples:
+{"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}
+{"event": "Launched Progress AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}
+
+RULES:
+- ONLY include events with clear dates within the last 90 days from today
+- If no events from the last 90 days exist in sources, return an EMPTY array []
+- Never fabricate dates or events
+- Max 15 words per event description
+- Each event must be factual (funding, product launch, hire, partnership, milestone)
+- Include source URL and title for each event""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 5: OPENING MOVES (3 conversation directions)
+═══════════════════════════════════════
+
+Generate exactly 3 conversation opening DIRECTIONS (not scripts).
+Each move has an "angle" (2-4 word label) and a "suggestion" (max 25 words).
+
+The suggestion is a tactical direction the sales rep adapts to their own voice.
+Format: "[Lead with X] — [ask about / reference Y]."
+
+Examples:
+{"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."}
+{"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like for that partnership."}
+{"angle": "AI Investment", "suggestion": "Lead with the $15M AI/robotics reinvestment — ask about scaling across diverse environments."}
+
+RULES:
+- Maximum 25 words per suggestion
+- Direction, not a script — tell the rep WHAT to reference and WHAT to ask
+- Format: "[Lead with X] — [ask about / reference Y]"
+- Each angle must target a DIFFERENT dimension
+- Reference specific facts/signals from the research""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -607,25 +630,36 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": "CMO, Impossible Foods" or null,
-  "executive_summary": "2-3 sentence summary...",
-  "executive_orientation": {
-    "growth_posture": "Aggressive expansion leader in proof-of-scale phase",
-    "functional_bias": "Marketing-led operator balancing impact narrative with commercial viability",
-    "role_context": "New CEO (8 months) investing in product quality during rapid scaling",
-    "vulnerable": "Vulnerable: Execution risk, retailer ROI pressure, unproven at enterprise scale"
+  "executive_summary": "Single-sentence snapshot, max 25 words",
+  "pull_quote": {
+    "quote": "It's to me truly unacceptable that we continue to waste food at this scale...",
+    "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45"
   },
+  "executive_orientation": {
+    "bullets": [
+      "Aggressive expansion: scaling from 2,000 to 2,500 stores in 12 months",
+      "Marketing-led operator: leads with sustainability narrative over cost savings",
+      "Enterprise bet: Kroger pilot is make-or-break validation for platform viability",
+      "Quality investment: prioritizing UX (AI images) despite scaling pressure"
+    ],
+    "key_pressure": "Execution risk from 25% store growth in 12 months with unproven enterprise infrastructure [VIDEO 1]"
+  },
+  "recent_moves": [
+    {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"},
+    {"event": "Launched AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}
+  ],
   "opening_moves": [
-    {"angle": "Scaling Pain", "suggestion": "Your 25% store expansion..."},
-    {"angle": "Enterprise Bet", "suggestion": "The Kroger pilot feels like..."},
-    {"angle": "Mission vs. Margin", "suggestion": "You've talked about..."}
+    {"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."},
+    {"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like."},
+    {"angle": "Mission vs. Margin", "suggestion": "Lead with triple bottom line narrative — ask how impact and margin compete."}
   ],
   "signals": [
     {
       "category": "GROWTH",
-      "signal": "Aggressive 25% expansion (2,000→2,500 by EOY) despite 8 months as CEO — high risk/reward growth posture with execution exposure",
-      "quote": "It's over 2,000 and on any given day probably getting closer to 2,500... there's a lot more growth happening this year.",
+      "signal": "Aggressive 25% expansion despite 8 months as CEO — execution exposure",
+      "quote": "It's over 2,000 and on any given day probably getting closer to 2,500...",
       "source": {
-        "type": "video",  // "podcast", "video", or "article"
+        "type": "video",
         "title": "Jordan Schenck CEO Interview",
         "url": "https://youtube.com/watch?v=abgKopCIDOY",
         "timestamp": "08:30",
@@ -635,8 +669,8 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_summary", "executive_orientation", "opening_moves", and "signals".
-If no quality signals found, return {"prior_role": null, "executive_summary": "...", "executive_orientation": {...}, "opening_moves": [...], "signals": []}.""")
+Return a JSON object with "prior_role", "executive_summary", "pull_quote", "executive_orientation", "recent_moves", "opening_moves", and "signals".
+If no quality signals found, return {"prior_role": null, "executive_summary": "...", "pull_quote": null, "executive_orientation": {"bullets": [], "key_pressure": ""}, "recent_moves": [], "opening_moves": [], "signals": []}.""")
 
     return "\n".join(lines)
 
@@ -674,27 +708,28 @@ def _build_quick_prep_system_low_signal(request: ResearchRequest) -> str:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 1: EXECUTIVE ORIENTATION (4 lines — LOW SIGNAL MODE)
+PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Generate an honest, role-based Executive Orientation. Each line MUST acknowledge limited signal.
+Generate 3-5 Lead Orientation bullets with honest role-based inference.
+Each bullet MUST:
+- Represent a DIFFERENT strategic dimension
+- Acknowledge limited direct signal where appropriate
+- Label inferences: "Inferred from role context" or "Based on company positioning"
+- Convert available facts → implications
 
-LINE 1 — GROWTH POSTURE (role-inferred):
-  ✓ "Limited direct signal — [title] at [company] during [growth phase] suggests [orientation]"
-  ✗ Don't claim to know their growth philosophy without evidence
+Then add ONE Key Pressure line (role-inferred if no direct evidence).
 
-LINE 2 — FUNCTIONAL BIAS (role-inferred):
-  ✓ "[Title]-focused operator — role context suggests emphasis on [likely priorities]"
-  ✗ Don't attribute personality traits without direct quotes
+Examples:
+✓ "Limited direct signal — [title] at [company] during [growth phase] suggests expansion-focused posture"
+✓ "[Title]-focused operator — role context suggests emphasis on [likely priorities]"
+✓ "Key Pressure: Limited direct signal — role-typical exposures include [role-based pressures]"
 
-LINE 3 — ROLE CONTEXT:
-  ✓ "[What we actually know about their role, tenure, background from sources]"
-  ✓ If limited: "Role details limited to [title] at [company]; tenure and background not publicly confirmed"
-
-LINE 4 — VULNERABILITY:
-  ✓ "Limited direct signal — role-typical exposures include [role-based pressures]"
-  ✗ NEVER: Speculative personal vulnerabilities without evidence
-  ✗ NEVER: Generic corporate challenges presented as personal vulnerability""")
+RULES:
+- Each bullet: max 20 words
+- No two bullets may address the same dimension
+- Be honest about confidence level
+- NEVER fabricate or speculate without evidence""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -732,37 +767,45 @@ For inferred signals, set source type to "article" and use the most relevant com
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SUMMARY (2-3 sentences — LOW SIGNAL MODE)
+PART 3: EXECUTIVE SNAPSHOT (1 sentence, max 25 words — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Write a concise 2-3 sentence summary that honestly frames what we know.
-- Lead with the person's identity and role
-- Acknowledge limited direct signal
-- Frame what they're likely navigating based on role context
+Write ONE short sentence framing what we know about this person's posture.
 
-Example:
-"[Name] serves as [Title] at [Company], a [brief company context].
-Limited direct executive content is available; analysis is primarily role-inferred.
-As [title], they're likely navigating [key role-typical challenge]."
+Examples:
+✓ "[Title] at [Company] navigating [key role-typical challenge] with limited public signal."
+✓ "[Title] operating in [growth/transition context] — direct executive content unavailable."
 
 RULES:
-- Write in third person
-- Be honest about confidence level
+- ONE sentence only, maximum 25 words
+- Acknowledge limited signal honestly
 - Do NOT speculate on psychology""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 4: OPENING MOVES (3 conversation starters — LOW SIGNAL MODE)
+PART 4: RECENT MOVES (last 90 days — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Generate 3 conversation openers even with limited signal.
-Use role context and company information to craft smart questions.
+Same rules as standard mode. Up to 4 factual events from the last 90 days.
+If no dated events exist, return an EMPTY array [].
+Never fabricate dates or events.""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+PART 5: OPENING MOVES (3 conversation directions — LOW SIGNAL MODE)
+═══════════════════════════════════════
+
+Generate 3 conversation directions even with limited signal.
+Frame as genuine discovery questions (we don't have deep signal, so ASK).
+
+Format: "[Lead with X] — [ask about Y]" (max 25 words per suggestion)
 
 Example:
-{"angle": "Role Context", "suggestion": "I'd love to understand how your priorities have evolved since joining [Company] — what's top of mind for you right now?"}
+{"angle": "Role Context", "suggestion": "Lead with their role at [Company] — ask how priorities have evolved since joining."}
 
 RULES:
-- Frame as genuine discovery questions (we don't have deep signal, so ASK)
+- Maximum 25 words per suggestion
+- Direction, not a script
 - Reference company context the person operates in
 - Each angle targets a different dimension""")
 
@@ -772,17 +815,21 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": null,
-  "executive_summary": "2-3 sentence summary acknowledging limited signal...",
+  "executive_summary": "Single-sentence snapshot acknowledging limited signal, max 25 words",
+  "pull_quote": null,
   "executive_orientation": {
-    "growth_posture": "Limited direct signal — ...",
-    "functional_bias": "...",
-    "role_context": "...",
-    "vulnerable": "Limited direct signal — role-typical exposures include ..."
+    "bullets": [
+      "Limited direct signal — [title] at [company] suggests [orientation]",
+      "[Title]-focused operator — role context suggests emphasis on [priorities]",
+      "Role details limited to [title] at [company]; tenure not publicly confirmed"
+    ],
+    "key_pressure": "Limited direct signal — role-typical exposures include [role-based pressures]"
   },
+  "recent_moves": [],
   "opening_moves": [
-    {"angle": "Role Context", "suggestion": "..."},
-    {"angle": "Company Momentum", "suggestion": "..."},
-    {"angle": "Market Position", "suggestion": "..."}
+    {"angle": "Role Context", "suggestion": "Lead with their role at [Company] — ask how priorities have evolved."},
+    {"angle": "Company Momentum", "suggestion": "Reference recent company activity — ask how it shapes their focus."},
+    {"angle": "Market Position", "suggestion": "Lead with competitive landscape — ask about differentiation strategy."}
   ],
   "signals": [
     {
@@ -800,7 +847,7 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_summary", "executive_orientation", "opening_moves", and "signals".
+Return a JSON object with "prior_role", "executive_summary", "pull_quote", "executive_orientation", "recent_moves", "opening_moves", and "signals".
 EVERY signal must be framed around the person, never the company alone.""")
 
     return "\n".join(lines)
@@ -1360,6 +1407,8 @@ async def run_quick_prep_only(
     executive_orientation = None
     executive_summary = None
     opening_moves = []
+    pull_quote = None
+    recent_moves = []
 
     try:
         parsed = _parse_json_safe(raw.strip())
@@ -1367,17 +1416,45 @@ async def run_quick_prep_only(
             prior_role = parsed.get("prior_role")
             raw_signals = parsed.get("signals") or []
 
+            # Executive Orientation — new flexible bullets + key_pressure
             eo_raw = parsed.get("executive_orientation")
             if isinstance(eo_raw, dict):
+                raw_bullets = eo_raw.get("bullets") or []
+                # Backward compat: if old fixed fields present, convert
+                if not raw_bullets and eo_raw.get("growth_posture"):
+                    raw_bullets = [
+                        v for v in [
+                            eo_raw.get("growth_posture"),
+                            eo_raw.get("functional_bias"),
+                            eo_raw.get("role_context"),
+                        ] if v
+                    ]
                 executive_orientation = ExecutiveOrientation(
-                    growth_posture=eo_raw.get("growth_posture", ""),
-                    functional_bias=eo_raw.get("functional_bias", ""),
-                    role_context=eo_raw.get("role_context", ""),
-                    vulnerable=eo_raw.get("vulnerable", ""),
+                    bullets=[b for b in raw_bullets if isinstance(b, str)][:5],
+                    key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
                 )
 
             executive_summary = parsed.get("executive_summary") or None
 
+            # Pull quote
+            pq_raw = parsed.get("pull_quote")
+            if isinstance(pq_raw, dict) and pq_raw.get("quote"):
+                pull_quote = {"quote": pq_raw["quote"], "source": pq_raw.get("source") or ""}
+            elif isinstance(pq_raw, str) and pq_raw:
+                pull_quote = {"quote": pq_raw, "source": ""}
+
+            # Recent moves
+            rm_raw = parsed.get("recent_moves") or []
+            for rm in rm_raw[:4]:
+                if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                    recent_moves.append({
+                        "event": rm["event"],
+                        "date": rm["date"],
+                        "source_url": rm.get("source_url") or "",
+                        "source_title": rm.get("source_title") or "",
+                    })
+
+            # Opening moves
             raw_moves = parsed.get("opening_moves") or []
             for move in raw_moves[:3]:
                 if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
@@ -1410,9 +1487,10 @@ async def run_quick_prep_only(
             "executive_summary": executive_summary,
         },
         "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+        "recent_moves": recent_moves,
         "signals": [s.model_dump() for s in signals],
         "opening_moves": [m.model_dump() for m in opening_moves],
-        "pull_quote": None,
+        "pull_quote": pull_quote,
         "dossier": None,
         "warnings": [],
         "sources_analyzed": {
@@ -1490,6 +1568,8 @@ async def synthesize(
     executive_orientation = None
     executive_summary = None
     opening_moves = []
+    qp_pull_quote = None
+    recent_moves = []
     if isinstance(quick_result, Exception):
         logger.error(f"Gemini Quick Prep error: {quick_result}")
     else:
@@ -1499,20 +1579,45 @@ async def synthesize(
                 prior_role = parsed.get("prior_role")
                 raw_signals = parsed.get("signals") or []
 
-                # Parse Executive Orientation
+                # Executive Orientation — new flexible bullets + key_pressure
                 eo_raw = parsed.get("executive_orientation")
                 if isinstance(eo_raw, dict):
+                    raw_bullets = eo_raw.get("bullets") or []
+                    # Backward compat: if old fixed fields present, convert
+                    if not raw_bullets and eo_raw.get("growth_posture"):
+                        raw_bullets = [
+                            v for v in [
+                                eo_raw.get("growth_posture"),
+                                eo_raw.get("functional_bias"),
+                                eo_raw.get("role_context"),
+                            ] if v
+                        ]
                     executive_orientation = ExecutiveOrientation(
-                        growth_posture=eo_raw.get("growth_posture", ""),
-                        functional_bias=eo_raw.get("functional_bias", ""),
-                        role_context=eo_raw.get("role_context", ""),
-                        vulnerable=eo_raw.get("vulnerable", ""),
+                        bullets=[b for b in raw_bullets if isinstance(b, str)][:5],
+                        key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
                     )
 
-                # Parse Executive Summary
                 executive_summary = parsed.get("executive_summary") or None
 
-                # Parse Opening Moves
+                # Pull quote from QP
+                pq_raw = parsed.get("pull_quote")
+                if isinstance(pq_raw, dict) and pq_raw.get("quote"):
+                    qp_pull_quote = {"quote": pq_raw["quote"], "source": pq_raw.get("source") or ""}
+                elif isinstance(pq_raw, str) and pq_raw:
+                    qp_pull_quote = {"quote": pq_raw, "source": ""}
+
+                # Recent moves
+                rm_raw = parsed.get("recent_moves") or []
+                for rm in rm_raw[:4]:
+                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                        recent_moves.append({
+                            "event": rm["event"],
+                            "date": rm["date"],
+                            "source_url": rm.get("source_url") or "",
+                            "source_title": rm.get("source_title") or "",
+                        })
+
+                # Opening moves
                 raw_moves = parsed.get("opening_moves") or []
                 for move in raw_moves[:3]:
                     if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
@@ -1543,9 +1648,10 @@ async def synthesize(
                     "executive_summary": executive_summary,
                 },
                 "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+                "recent_moves": recent_moves,
                 "signals": [s.model_dump() for s in signals],
                 "opening_moves": [m.model_dump() for m in opening_moves],
-                "pull_quote": None,
+                "pull_quote": qp_pull_quote,
                 "dossier": None,
                 "warnings": [],
                 "sources_analyzed": {
@@ -1569,7 +1675,7 @@ async def synthesize(
 
     # ── Parse Full Dossier ──
     dossier = None
-    pull_quote = None
+    dossier_pull_quote = None
     if isinstance(dossier_result, Exception):
         logger.error(f"Gemini Dossier error: {dossier_result}")
     else:
@@ -1578,11 +1684,18 @@ async def synthesize(
             if isinstance(parsed2, dict):
                 dossier = _build_dossier(parsed2)
                 # Extract pull quote from dossier response
-                pull_quote = parsed2.get("pull_quote") or None
+                pq2 = parsed2.get("pull_quote")
+                if isinstance(pq2, dict) and pq2.get("quote"):
+                    dossier_pull_quote = {"quote": pq2["quote"], "source": pq2.get("source") or ""}
+                elif isinstance(pq2, str) and pq2:
+                    dossier_pull_quote = {"quote": pq2, "source": ""}
             else:
                 logger.warning("Dossier call returned non-dict, skipping")
         except Exception as e:
             logger.error(f"Dossier parse error: {e}")
+
+    # Use QP pull quote, fall back to dossier pull quote
+    pull_quote = qp_pull_quote or dossier_pull_quote
 
     # ── Compute Research Confidence & Thin Signal Warning ──
     if dossier:
@@ -1618,6 +1731,14 @@ async def synthesize(
             executive_summary=executive_summary,
         ),
         executive_orientation=executive_orientation,
+        recent_moves=[
+            RecentMove(
+                event=rm["event"],
+                date=rm["date"],
+                source_url=rm.get("source_url"),
+                source_title=rm.get("source_title"),
+            ) for rm in recent_moves
+        ],
         signals=signals,
         opening_moves=opening_moves,
         pull_quote=pull_quote,

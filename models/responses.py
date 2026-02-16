@@ -53,18 +53,22 @@ class PersonInfo(BaseModel):
     )
     executive_summary: Optional[str] = Field(
         None,
-        description="2-3 sentence executive summary for Quick Prep header",
+        description="1-sentence executive snapshot, max 25 words",
     )
 
 
 # ── Executive Orientation (Quick Prep — between header and signals) ──
 
 class ExecutiveOrientation(BaseModel):
-    """4-line executive synthesis block for Quick Prep."""
-    growth_posture: str = ""
-    functional_bias: str = ""
-    role_context: str = ""
-    vulnerable: str = ""
+    """3-5 flexible orientation bullets + key pressure line for Quick Prep."""
+    bullets: List[str] = Field(
+        default_factory=list,
+        description="3-5 orientation bullets, each a different strategic dimension",
+    )
+    key_pressure: str = Field(
+        default="",
+        description="Single key pressure/vulnerability line (evidence-based)",
+    )
 
 
 # ── Research Confidence (top of Dossier) ──
@@ -159,23 +163,35 @@ class FullDossier(BaseModel):
     sources: List[DossierSource] = Field(default_factory=list)
 
 
+class RecentMove(BaseModel):
+    """A factual event from the last 90 days with date and source."""
+    event: str = Field(description="Factual event, max 15 words")
+    date: str = Field(description="Month Year, e.g. 'January 2026'")
+    source_url: Optional[str] = None
+    source_title: Optional[str] = None
+
+
 class OpeningMove(BaseModel):
-    """A single conversation opening move suggestion."""
+    """A single conversation opening direction."""
     angle: str = Field(description="Short label, e.g. 'Scaling Pain'")
-    suggestion: str = Field(description="1-2 sentence conversation opener")
+    suggestion: str = Field(description="Max 25 words: '[Lead with X] — [ask about Y]'")
 
 
 class ResearchResponse(BaseModel):
     person: PersonInfo
     executive_orientation: Optional[ExecutiveOrientation] = None
+    recent_moves: List[RecentMove] = Field(
+        default_factory=list,
+        description="Up to 4 factual events from the last 90 days",
+    )
     signals: List[Signal] = Field(default_factory=list, max_length=5)
     opening_moves: List[OpeningMove] = Field(
         default_factory=list,
-        description="3 conversation opening suggestions for the sales rep",
+        description="3 conversation opening directions for the sales rep",
     )
-    pull_quote: Optional[str] = Field(
+    pull_quote: Optional[dict] = Field(
         None,
-        description="Best direct quote from the executive (verbatim, 15-40 words)",
+        description="Best direct quote: {quote, source}",
     )
     dossier: Optional[FullDossier] = Field(
         None, description="Full Dossier (VIEW 2)"

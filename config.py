@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     max_podcast_audio_duration_sec: int = 1800  # 30 min cap per episode
 
     # Gemini settings
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3-flash"
     gemini_max_output_tokens: int = 16384
     gemini_temperature: float = 0.3
 
