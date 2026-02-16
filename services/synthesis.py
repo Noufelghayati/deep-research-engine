@@ -40,10 +40,28 @@ CATEGORY_PRIORITY = ["GROWTH", "CHALLENGE", "MARKET", "PRODUCT", "TENSION", "TRA
 #  Shared helpers
 # ═══════════════════════════════════════════════════════════
 
+def _format_extracted_signals(signals) -> str:
+    """Format pre-extracted signals for a single source."""
+    if not signals:
+        return ""
+    lines = ["PRE-EXTRACTED SIGNALS:"]
+    for sig in signals:
+        line = f"  [{sig.signal_type.upper()}] {sig.content}"
+        if sig.quote:
+            line += f' \u2014 "{sig.quote}"'
+        if sig.timestamp:
+            line += f" ({sig.timestamp})"
+        line += f" [confidence: {sig.confidence}]"
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
 def _build_source_material(artifacts: CollectedArtifacts) -> str:
     """Build the source material block shared by both prompts.
 
     Source numbering: PODCAST 1, 2... → VIDEO N+1... → ARTICLE M+1...
+    Each source includes pre-extracted signals (from signal_extraction step)
+    followed by raw text for quote verification.
     """
     sections = []
     source_num = 0
@@ -62,6 +80,10 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
             section += "Match type: PERSON-LEVEL (features the target person)\n"
         else:
             section += "Match type: COMPANY-LEVEL (features company leadership)\n"
+        # Pre-extracted signals
+        signals_block = _format_extracted_signals(podcast.extracted_signals)
+        if signals_block:
+            section += signals_block
         if podcast.transcript_text:
             section += f"Transcript:\n{podcast.transcript_text}\n"
         else:
@@ -83,6 +105,10 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
             section += "Match type: PERSON-LEVEL (features the target person)\n"
         else:
             section += "Match type: COMPANY-LEVEL (features company leadership)\n"
+        # Pre-extracted signals
+        signals_block = _format_extracted_signals(video.extracted_signals)
+        if signals_block:
+            section += signals_block
         if video.transcript_text:
             section += f"Transcript:\n{video.transcript_text}\n"
         else:
@@ -98,6 +124,10 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
         section = f"=== SOURCE {source_num}: Article ===\n"
         section += f"Title: {article.title}\n"
         section += f"URL: {article.url}\n"
+        # Pre-extracted signals
+        signals_block = _format_extracted_signals(article.extracted_signals)
+        if signals_block:
+            section += signals_block
         section += f"Content:\n{article.text}\n"
         sections.append(section)
 

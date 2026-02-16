@@ -24,6 +24,7 @@ class ScoredVideo(BaseModel):
     transcript_text: Optional[str] = None
     transcript_available: bool = False
     url: str = ""
+    extracted_signals: list = []
 
 
 class PodcastCandidate(BaseModel):
@@ -53,6 +54,16 @@ class ScoredPodcast(BaseModel):
     transcript_text: Optional[str] = None
     transcript_available: bool = False
     url: str = ""            # ListenNotes page URL
+    extracted_signals: list = []
+
+
+class ExtractedSignal(BaseModel):
+    """Pre-extracted signal from a single source, before synthesis."""
+    signal_type: str = "theme"  # "quote", "theme", "fact", "opinion"
+    content: str = ""
+    quote: Optional[str] = None
+    timestamp: Optional[str] = None
+    confidence: float = 0.8
 
 
 class ArticleContent(BaseModel):
@@ -62,6 +73,7 @@ class ArticleContent(BaseModel):
     text: str
     content_length_chars: int
     published_date: Optional[str] = None
+    extracted_signals: List[ExtractedSignal] = []
 
 
 class ArticleSearchEntry(BaseModel):

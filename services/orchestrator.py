@@ -9,6 +9,7 @@ from services.disambiguation import score_and_filter, score_and_filter_podcasts
 from services.article_fetcher import search_and_fetch_articles
 from services.podcast_search import search_podcast_episodes, scrape_episode_page, fetch_podcast_transcript
 from services.synthesis import synthesize
+from services.signal_extraction import extract_all_signals
 from config import settings
 import asyncio
 import logging
@@ -459,6 +460,23 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
     else:
         await emit("step", step="step3", status="done", message="Using video sources only")
+
+    # ── Signal Extraction (per-source, parallel) ──
+    total_sources = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
+    if total_sources > 0:
+        await emit("step", step="extraction", status="running", message="Extracting source signals...")
+        try:
+            await asyncio.wait_for(
+                extract_all_signals(artifacts, emit=_emit),
+                timeout=max(_time_left(), 30),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Signal extraction timeout at {_elapsed():.1f}s")
+        total_signals = sum(
+            len(getattr(s, 'extracted_signals', []))
+            for s in list(artifacts.podcasts) + list(artifacts.videos) + list(artifacts.articles)
+        )
+        await emit("step", step="extraction", status="done", message=f"Extracted {total_signals} signal(s) from {total_sources} source(s)")
 
     # ── Synthesis ──
     await emit("step", step="synthesis", status="running", message="Synthesizing intelligence...")
