@@ -22,7 +22,7 @@ from models.responses import (
     CATEGORY_ICONS,
 )
 from config import settings
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 import re
@@ -1326,7 +1326,7 @@ async def run_quick_prep_only(
     artifacts: CollectedArtifacts,
     request: ResearchRequest,
     has_person_content: bool = True,
-) -> dict | None:
+) -> Optional[dict]:
     """
     Run Quick Prep synthesis only (no dossier).
     Called incrementally as sources are gathered.
