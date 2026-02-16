@@ -8,8 +8,8 @@ from services.youtube_transcript import fetch_transcript
 from services.disambiguation import score_and_filter, score_and_filter_podcasts
 from services.article_fetcher import search_and_fetch_articles
 from services.podcast_search import search_podcast_episodes, scrape_episode_page, fetch_podcast_transcript
-from services.synthesis import synthesize
-from services.signal_extraction import extract_all_signals
+from services.synthesis import synthesize, run_quick_prep_only
+from services.signal_extraction import extract_all_signals, extract_signals_for_sources
 from config import settings
 import asyncio
 import logging
@@ -351,6 +351,36 @@ async def _step3_articles(
     logger.info(f"Step 3 result: {len(articles)} article(s) found")
 
 
+def _build_source_list(artifacts):
+    """Build SSE-friendly source list from artifacts."""
+    source_list = []
+    src_num = 0
+    for p in artifacts.podcasts:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "podcast",
+            "title": p.title, "url": p.url,
+            "platform": p.podcast_title or "Podcast",
+            "date": p.published_at or "",
+        })
+    for v in artifacts.videos:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "video",
+            "title": v.title, "url": v.url,
+            "platform": v.channel_title or "YouTube",
+            "date": v.published_at or "",
+        })
+    for a in artifacts.articles:
+        src_num += 1
+        source_list.append({
+            "number": src_num, "type": "article",
+            "title": a.title, "url": a.url,
+            "platform": "", "date": a.published_date or "",
+        })
+    return source_list
+
+
 async def run_research(request: ResearchRequest, on_progress=None) -> ResearchResponse:
     """
     Execute the full research pipeline:
@@ -380,6 +410,59 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     def _time_left():
         return max(0, settings.pipeline_timeout_sec - _elapsed())
 
+    # ── Incremental Quick Prep: fire after each step that finds new sources ──
+    _qp_task = None
+    _qp_src_count = 0
+
+    async def _fire_incremental_qp():
+        nonlocal _qp_task, _qp_src_count
+
+        current = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
+        if current == 0 or current == _qp_src_count:
+            return  # no new sources since last fire
+
+        # Cancel previous QP task if still running
+        if _qp_task and not _qp_task.done():
+            _qp_task.cancel()
+
+        _qp_src_count = current
+
+        async def _do_qp():
+            try:
+                # Extract signals for new sources (skips already-extracted)
+                all_src = list(artifacts.podcasts) + list(artifacts.videos) + list(artifacts.articles)
+                await extract_signals_for_sources(
+                    all_src,
+                    artifacts.person_name or "N/A",
+                    artifacts.company_name,
+                )
+
+                # Cancellation point before expensive Gemini call
+                await asyncio.sleep(0)
+
+                # Emit updated source list for citation linking
+                sl = _build_source_list(artifacts)
+                if sl:
+                    await emit("sources", sources=sl)
+
+                # Run Quick Prep with current sources
+                ppc = sum(1 for p in artifacts.podcasts if p.is_person_match)
+                pvc = sum(1 for v in artifacts.videos if v.is_person_match)
+                has_person = pvc > 0 or ppc > 0
+
+                result = await run_quick_prep_only(
+                    artifacts, request, has_person_content=has_person
+                )
+                if result:
+                    await emit("partial", section="quick_prep", data=result)
+                    logger.info(f"Incremental QP emitted ({current} sources)")
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.warning(f"Incremental Quick Prep failed: {e}")
+
+        _qp_task = asyncio.create_task(_do_qp())
+
     # ── Step 0: Podcast Search ──
     await emit("step", step="step0", status="searching", message="Searching for podcast episodes...")
     try:
@@ -398,6 +481,10 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         await emit("step", step="step0", status="done", message=f"Found {len(artifacts.podcasts)} podcast episode(s)")
     else:
         await emit("step", step="step0", status="done", message="No podcast episodes found")
+
+    # Fire incremental QP after podcasts
+    if not timed_out:
+        await _fire_incremental_qp()
 
     # ── Step 1: Person-level YouTube ──
     if not timed_out:
@@ -418,6 +505,10 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
     await emit("step", step="step1", status="done", message=f"Found {person_video_count} person video(s)")
 
+    # Fire incremental QP after videos
+    if not timed_out:
+        await _fire_incremental_qp()
+
     # ── Step 2: Company leadership fallback (if Step 1 weak) ──
     if not timed_out and step1_strength < settings.weak_result_threshold:
         prev_count = len(artifacts.videos)
@@ -435,6 +526,9 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         for v in new_videos:
             await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
         await emit("step", step="step2", status="done", message=f"Found {len(new_videos)} leadership video(s)")
+
+        # Fire incremental QP after company videos
+        await _fire_incremental_qp()
 
     # Detect "boring VP" — no person-level interviews found
     person_podcast_count = sum(1 for p in artifacts.podcasts if p.is_person_match)
@@ -461,6 +555,13 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     else:
         await emit("step", step="step3", status="done", message="Using video sources only")
 
+    # Fire incremental QP after articles
+    await _fire_incremental_qp()
+
+    # ── Cancel incremental QP before bulk extraction + final synthesis ──
+    if _qp_task and not _qp_task.done():
+        _qp_task.cancel()
+
     # ── Signal Extraction (per-source, parallel) ──
     total_sources = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
     if total_sources > 0:
@@ -479,31 +580,7 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         await emit("step", step="extraction", status="done", message=f"Extracted {total_signals} signal(s) from {total_sources} source(s)")
 
     # ── Emit source list for early citation linking ──
-    source_list = []
-    src_num = 0
-    for p in artifacts.podcasts:
-        src_num += 1
-        source_list.append({
-            "number": src_num, "type": "podcast",
-            "title": p.title, "url": p.url,
-            "platform": p.podcast_title or "Podcast",
-            "date": p.published_at or "",
-        })
-    for v in artifacts.videos:
-        src_num += 1
-        source_list.append({
-            "number": src_num, "type": "video",
-            "title": v.title, "url": v.url,
-            "platform": v.channel_title or "YouTube",
-            "date": v.published_at or "",
-        })
-    for a in artifacts.articles:
-        src_num += 1
-        source_list.append({
-            "number": src_num, "type": "article",
-            "title": a.title, "url": a.url,
-            "platform": "", "date": a.published_date or "",
-        })
+    source_list = _build_source_list(artifacts)
     if source_list:
         await emit("sources", sources=source_list)
 

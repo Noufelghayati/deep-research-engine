@@ -90,65 +90,65 @@ def _parse_signals(raw_list: list) -> list:
     return signals
 
 
-async def extract_all_signals(artifacts: CollectedArtifacts, emit=None) -> None:
+async def extract_signals_for_sources(
+    sources: list,
+    person_name: str,
+    company_name: str,
+) -> int:
     """
-    Extract structured signals from all collected sources in parallel.
-    Modifies source objects in-place, adding extracted_signals.
+    Extract structured signals from a flat list of source objects.
+    Skips sources that already have non-empty extracted_signals (dedup).
+    Detects source type from object attributes.
+    Returns the count of newly extracted signals.
     """
     loop = asyncio.get_event_loop()
     tasks = []
     source_refs = []
 
-    person = artifacts.person_name or "N/A"
-    company = artifacts.company_name
-
-    # Build extraction tasks for each source
-    for p in artifacts.podcasts:
-        text = p.transcript_text or p.description
-        if not text:
+    for source in sources:
+        # Skip if already extracted
+        if getattr(source, 'extracted_signals', None):
             continue
-        ctx = (
-            f"TARGET: {person} at {company}\n"
-            f"SOURCE TYPE: Podcast Episode\n"
-            f"TITLE: {p.title}\n"
-            f"SHOW: {p.podcast_title}\n"
-            f"DATE: {p.published_at or 'Unknown'}"
-        )
+
+        # Detect source type by attribute and build context
+        if hasattr(source, 'podcast_title'):
+            text = source.transcript_text or source.description
+            if not text:
+                continue
+            ctx = (
+                f"TARGET: {person_name} at {company_name}\n"
+                f"SOURCE TYPE: Podcast Episode\n"
+                f"TITLE: {source.title}\n"
+                f"SHOW: {source.podcast_title}\n"
+                f"DATE: {source.published_at or 'Unknown'}"
+            )
+        elif hasattr(source, 'channel_title'):
+            text = source.transcript_text or source.description
+            if not text:
+                continue
+            ctx = (
+                f"TARGET: {person_name} at {company_name}\n"
+                f"SOURCE TYPE: YouTube Video\n"
+                f"TITLE: {source.title}\n"
+                f"CHANNEL: {source.channel_title}\n"
+                f"DATE: {source.published_at or 'Unknown'}"
+            )
+        else:
+            if not getattr(source, 'text', None):
+                continue
+            text = source.text
+            ctx = (
+                f"TARGET: {person_name} at {company_name}\n"
+                f"SOURCE TYPE: Article\n"
+                f"TITLE: {source.title}\n"
+                f"DATE: {getattr(source, 'published_date', None) or 'Unknown'}"
+            )
+
         tasks.append(loop.run_in_executor(None, _extract_sync, text, ctx))
-        source_refs.append(p)
-
-    for v in artifacts.videos:
-        text = v.transcript_text or v.description
-        if not text:
-            continue
-        ctx = (
-            f"TARGET: {person} at {company}\n"
-            f"SOURCE TYPE: YouTube Video\n"
-            f"TITLE: {v.title}\n"
-            f"CHANNEL: {v.channel_title}\n"
-            f"DATE: {v.published_at or 'Unknown'}"
-        )
-        tasks.append(loop.run_in_executor(None, _extract_sync, text, ctx))
-        source_refs.append(v)
-
-    for a in artifacts.articles:
-        if not a.text:
-            continue
-        ctx = (
-            f"TARGET: {person} at {company}\n"
-            f"SOURCE TYPE: Article\n"
-            f"TITLE: {a.title}\n"
-            f"DATE: {a.published_date or 'Unknown'}"
-        )
-        tasks.append(loop.run_in_executor(None, _extract_sync, a.text, ctx))
-        source_refs.append(a)
+        source_refs.append(source)
 
     if not tasks:
-        logger.info("No sources to extract signals from")
-        return
-
-    if emit:
-        await emit("log", step="extraction", message=f"Extracting signals from {len(tasks)} source(s)...")
+        return 0
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -162,6 +162,35 @@ async def extract_all_signals(artifacts: CollectedArtifacts, emit=None) -> None:
         source_obj.extracted_signals = signals
         extracted_count += len(signals)
 
-    logger.info(f"Signal extraction complete: {extracted_count} signals from {len(tasks)} sources")
+    logger.info(f"Signal extraction: {extracted_count} signals from {len(tasks)} new sources")
+    return extracted_count
+
+
+async def extract_all_signals(artifacts: CollectedArtifacts, emit=None) -> None:
+    """
+    Extract structured signals from all collected sources in parallel.
+    Modifies source objects in-place, adding extracted_signals.
+    Skips sources that already have extracted signals.
+    """
+    all_sources = list(artifacts.podcasts) + list(artifacts.videos) + list(artifacts.articles)
+    if not all_sources:
+        logger.info("No sources to extract signals from")
+        return
+
+    new_count = sum(1 for s in all_sources if not getattr(s, 'extracted_signals', None))
+    if new_count == 0:
+        logger.info("All sources already have extracted signals — skipping")
+        return
+
     if emit:
-        await emit("log", step="extraction", message=f"Extracted {extracted_count} signal(s) from {len(tasks)} source(s)")
+        await emit("log", step="extraction", message=f"Extracting signals from {new_count} source(s)...")
+
+    extracted_count = await extract_signals_for_sources(
+        all_sources,
+        artifacts.person_name or "N/A",
+        artifacts.company_name,
+    )
+
+    logger.info(f"Signal extraction complete: {extracted_count} signals from {new_count} sources")
+    if emit:
+        await emit("log", step="extraction", message=f"Extracted {extracted_count} signal(s) from {new_count} source(s)")

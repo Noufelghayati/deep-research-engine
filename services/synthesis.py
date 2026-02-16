@@ -1319,6 +1319,111 @@ def _build_dossier(raw: dict) -> FullDossier:
 
 
 # ═══════════════════════════════════════════════════════════
+#  Incremental Quick Prep (called after each pipeline step)
+# ═══════════════════════════════════════════════════════════
+
+async def run_quick_prep_only(
+    artifacts: CollectedArtifacts,
+    request: ResearchRequest,
+    has_person_content: bool = True,
+) -> dict | None:
+    """
+    Run Quick Prep synthesis only (no dossier).
+    Called incrementally as sources are gathered.
+    Returns a dict suitable for SSE partial emission, or None on failure.
+    """
+    source_material = _build_source_material(artifacts)
+    if source_material == "No sources were found.":
+        return None
+
+    loop = asyncio.get_event_loop()
+    signal_strength = _assess_signal_strength(artifacts, request)
+
+    if signal_strength == "low" and request.target_name:
+        quick_system = _build_quick_prep_system_low_signal(request)
+    else:
+        quick_system = _build_quick_prep_system(request, has_person_content)
+
+    quick_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
+
+    try:
+        raw = await loop.run_in_executor(
+            None, _call_gemini_sync, quick_system, quick_content
+        )
+    except Exception as e:
+        logger.error(f"Incremental Quick Prep Gemini error: {e}")
+        return None
+
+    # Parse
+    prior_role = None
+    signals = []
+    executive_orientation = None
+    executive_summary = None
+    opening_moves = []
+
+    try:
+        parsed = _parse_json_safe(raw.strip())
+        if isinstance(parsed, dict):
+            prior_role = parsed.get("prior_role")
+            raw_signals = parsed.get("signals") or []
+
+            eo_raw = parsed.get("executive_orientation")
+            if isinstance(eo_raw, dict):
+                executive_orientation = ExecutiveOrientation(
+                    growth_posture=eo_raw.get("growth_posture", ""),
+                    functional_bias=eo_raw.get("functional_bias", ""),
+                    role_context=eo_raw.get("role_context", ""),
+                    vulnerable=eo_raw.get("vulnerable", ""),
+                )
+
+            executive_summary = parsed.get("executive_summary") or None
+
+            raw_moves = parsed.get("opening_moves") or []
+            for move in raw_moves[:3]:
+                if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
+                    opening_moves.append(OpeningMove(
+                        angle=move["angle"],
+                        suggestion=move["suggestion"],
+                    ))
+
+        elif isinstance(parsed, list):
+            raw_signals = parsed
+        else:
+            raw_signals = []
+
+        signals = _build_signals(raw_signals)
+        for i, sig in enumerate(signals, 1):
+            sig.id = i
+    except Exception as e:
+        logger.error(f"Incremental Quick Prep parse error: {e}")
+        return None
+
+    if not signals and not executive_orientation:
+        return None
+
+    return {
+        "person": {
+            "name": request.target_name,
+            "title": request.target_title,
+            "company": request.target_company,
+            "prior_role": prior_role,
+            "executive_summary": executive_summary,
+        },
+        "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+        "signals": [s.model_dump() for s in signals],
+        "opening_moves": [m.model_dump() for m in opening_moves],
+        "pull_quote": None,
+        "dossier": None,
+        "warnings": [],
+        "sources_analyzed": {
+            "podcasts": len(artifacts.podcasts),
+            "videos": len(artifacts.videos),
+            "articles": len(artifacts.articles),
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════
 #  Main synthesis entry point
 # ═══════════════════════════════════════════════════════════
 
