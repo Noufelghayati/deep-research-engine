@@ -1452,7 +1452,7 @@ async def synthesize(
             await on_partial("quick_prep", partial_data)
             logger.info("Emitted Quick Prep partial result")
             # Give SSE time to flush partial to client before dossier follows
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"Failed to emit Quick Prep partial: {e}")
 
