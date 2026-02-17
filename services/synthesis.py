@@ -1493,6 +1493,9 @@ async def run_quick_prep_only(
 
     try:
         parsed = _parse_json_safe(raw.strip())
+        # Unwrap single-element array (Gemini 3 sometimes wraps output in [])
+        if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+            parsed = parsed[0]
         if isinstance(parsed, dict):
             prior_role = parsed.get("prior_role")
             raw_signals = parsed.get("signals") or []
@@ -1652,6 +1655,9 @@ async def synthesize(
     else:
         try:
             parsed = _parse_json_safe(quick_result.strip())
+            # Unwrap single-element array (Gemini 3 sometimes wraps output in [])
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
             if isinstance(parsed, dict):
                 logger.info(f"QP parsed keys: {list(parsed.keys())}")
                 prior_role = parsed.get("prior_role")
@@ -1768,6 +1774,9 @@ async def synthesize(
     else:
         try:
             parsed2 = _parse_json_safe(dossier_result.strip())
+            # Unwrap single-element array (Gemini 3 sometimes wraps output in [])
+            if isinstance(parsed2, list) and len(parsed2) == 1 and isinstance(parsed2[0], dict):
+                parsed2 = parsed2[0]
             if isinstance(parsed2, dict):
                 dossier = _build_dossier(parsed2)
                 # Extract pull quote from dossier — validated against transcripts only
