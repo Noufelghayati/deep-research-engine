@@ -963,78 +963,68 @@ RECENCY & TENURE WEIGHTING:
 
     lines.append("")
     lines.append("""OUTPUT FORMAT (JSON object with 7 sections):
+
+⚠️ CRITICAL: The example below is ONLY to show JSON structure and field names.
+DO NOT copy any text, names, quotes, facts, or numbers from this example into your output.
+Your output must contain ONLY information from the SOURCE MATERIAL provided above.
+
+--- FORMAT EXAMPLE (structure only, do NOT copy content) ---
 {
-  "pull_quote": "It's to me truly unacceptable that we continue to fund and fuel more when we have yet to solve the practical reality of all of this amazing stuff that we produce isn't sold.",
+  "pull_quote": "<verbatim quote from transcript>",
   "background": [
-    "CEO at Flashfood (appointed May 2025, promoted from President & COO)",
-    "Joined Flashfood early 2023 as Chief Customer Officer & Chief Brand Officer",
-    "Rapid internal ascent: CCO/CBO → President & COO (Oct 2024) → CEO (May 2025)",
-    "Previously: Head of Global Marketing at Impossible Foods (2019-2022)",
-    "Career arc: Entrepreneurship → CPG marketing innovation → Food tech sustainability"
+    "<role> at <company> (<date>, promoted from <prior role>) [SOURCE N]",
+    "Previously: <prior role> at <prior company> (<years>) [SOURCE N]",
+    "Career arc: <domain1> → <domain2> → <current domain>"
   ],
   "executive_profile": {
     "leadership_orientation": {
-      "growth_stage": "Proof-of-scale expansion phase — scaling from 2,000 to 2,500+ stores (25% growth in 1 year)",
-      "strategic_posture": "Marketing-led growth with impact narrative — leads with sustainability mission, not just cost savings",
-      "decision_making_bias": "Growth over efficiency — aggressive expansion timeline despite operational risk, investing in UX during scaling",
-      "strategic_implication": "Suggests openness to scalable infrastructure partners"
+      "growth_stage": "<phase description> — <specific metrics from sources> [SOURCE N]",
+      "strategic_posture": "<approach/philosophy> — <how they lead, evidence-based> [SOURCE N]",
+      "decision_making_bias": "<bias description> — <specific evidence of this pattern> [SOURCE N]",
+      "strategic_implication": "<5-10 word observational note>"
     },
     "pressure_points": [
       {
-        "name": "Execution Risk",
-        "why_it_matters": "25% store growth in 12 months requires operational infrastructure that may not exist",
-        "evidence": "Platform stability and retailer ROI must hold during rapid expansion [VIDEO 1, ARTICLE 3]"
-      },
-      {
-        "name": "Credibility Window",
-        "why_it_matters": "New CEO promoted internally after only 2 years at company — must prove enterprise viability quickly",
-        "evidence": "Kroger pilot (16 stores) is key validation test [ARTICLE 4]"
-      },
-      {
-        "name": "Commercial Tension",
-        "why_it_matters": "Impact-driven mission vs retailer profitability requirements — all three bottom lines must work simultaneously",
-        "evidence": "Publicly frames as 'triple bottom line' company [ARTICLE 2, VIDEO 1]"
+        "name": "<short label>",
+        "why_it_matters": "<1-2 sentences on business impact> [SOURCE N]",
+        "evidence": "<specific quote or fact proving this> [SOURCE N]"
       }
     ]
   },
   "strategic_focus": [
     {
       "category": "GROWTH",
-      "title": "SCALING & EXPANSION",
+      "title": "<THEME IN CAPS>",
       "bullets": [
-        "Driving aggressive growth from 2,000 to 2,500+ stores by EOY — targeting full US saturation [VIDEO 1, ARTICLE 3]",
-        "Kroger partnership pilot (16 stores in Richmond) to prove enterprise viability [ARTICLE 4]"
+        "<strategic initiative with specific detail> [SOURCE N, SOURCE M]"
       ],
-      "strategic_implication": "Prioritizes velocity; may sacrifice short-term margin"
+      "strategic_implication": "<5-10 word so-what insight>"
     }
   ],
   "quotes": [
     {
-      "topic": "On Food Waste",
-      "quote": "It's to me truly unacceptable that we continue to fund and fuel more when we have yet to solve the practical reality of all of this amazing stuff that we produce isn't sold.",
-      "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45"
+      "topic": "<topic label>",
+      "quote": "<verbatim quote from source>",
+      "source": "<speaker> | <platform> - <date> - <timestamp>"
     }
   ],
   "momentum_grouped": [
     {
       "period": "2025-Present",
       "bullets": [
-        "Jordan appointed CEO (May 2025) — promoted from President & COO",
-        "Kroger partnership launched in Richmond (July 2025) — 16 store pilot"
+        "<event with date and context> [SOURCE N]"
       ]
     },
     {
       "period": "2024",
       "bullets": [
-        "Transformational rebrand and consumer app relaunch (January 2024)",
-        "Loblaw partnership delivered $50M in customer savings"
+        "<event with date and context> [SOURCE N]"
       ]
     },
     {
       "period": "Established Traction",
       "bullets": [
-        "140M+ pounds of food diverted from landfills",
-        "$355M+ saved by shoppers to date"
+        "<long-term achievement or foundation metric> [SOURCE N]"
       ]
     }
   ],
@@ -1042,23 +1032,24 @@ RECENCY & TENURE WEIGHTING:
     {
       "type": "primary",
       "icon": "📹",
-      "title": "Jordan Schenck | Flashfood",
-      "platform": "YouTube",
-      "date": "Apr 2, 2025",
-      "duration": "29:00",
-      "url": "https://youtube.com/watch?v=..."
+      "title": "<source title>",
+      "platform": "<platform>",
+      "date": "<date>",
+      "duration": "<duration>",
+      "url": "<url>"
     },
     {
       "type": "supporting",
       "icon": "📄",
-      "title": "Flashfood Appoints Jordan Schenck as CEO",
-      "platform": "flashfood.com",
-      "date": "May 1, 2025",
+      "title": "<source title>",
+      "platform": "<platform>",
+      "date": "<date>",
       "duration": null,
-      "url": "https://..."
+      "url": "<url>"
     }
   ]
 }
+--- END FORMAT EXAMPLE ---
 
 ═══════════════════════════════════════
 SECTION RULES:
