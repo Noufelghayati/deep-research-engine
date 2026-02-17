@@ -671,6 +671,10 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": "CMO, Impossible Foods" or null,
+  // ^ MUST be their IMMEDIATELY PREVIOUS role (the one right before their current position).
+  // NOT a role from 2-3 positions ago. If their current role is "CEO at Acme" and their
+  // LinkedIn shows "VP Sales at BigCorp" right before that, use "VP Sales, BigCorp".
+  // If they are currently at their ONLY known role, return null.
   "executive_summary": "Single-sentence snapshot, max 25 words",
   "pull_quote": {
     "quote": "It's to me truly unacceptable that we continue to waste food at this scale...",
@@ -856,6 +860,8 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": null,
+  // ^ Their IMMEDIATELY PREVIOUS role (right before current position), or null if unknown.
+  // Must be the role directly before their current one — never a role from 2+ positions ago.
   "executive_summary": "Single-sentence snapshot acknowledging limited signal, max 25 words",
   "pull_quote": null,
   "executive_orientation": {

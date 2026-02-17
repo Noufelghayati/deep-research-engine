@@ -493,9 +493,9 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     # ── Podcasts + Articles + Person YouTube in parallel ──
     # Articles are fast (~5-7s) → fires first QP while podcasts transcribe (~30s+)
     # Person YouTube runs concurrently (independent search + transcripts)
-    await emit("step", step="step0", status="searching", message="Searching for podcast episodes...")
-    await emit("step", step="step3", status="searching", message="Searching for articles...")
-    await emit("step", step="step1", status="searching", message="Searching for person videos...")
+    await emit("step", step="step0", status="searching", message="Analyzing interviews...")
+    await emit("step", step="step3", status="searching", message="Analyzing articles...")
+    await emit("step", step="step1", status="searching", message="Analyzing video content...")
 
     async def _run_podcasts():
         nonlocal timed_out
@@ -558,7 +558,7 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     # ── Company leadership fallback (if Step 1 weak — runs after gather) ──
     if step1_strength < settings.weak_result_threshold:
         prev_count = len(artifacts.videos)
-        await emit("step", step="step2", status="searching", message="Searching for company leadership videos...")
+        await emit("step", step="step2", status="searching", message="Analyzing company leadership content...")
         try:
             await asyncio.wait_for(
                 _step2_company_leadership(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
