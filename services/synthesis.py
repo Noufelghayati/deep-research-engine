@@ -57,6 +57,44 @@ def _format_extracted_signals(signals) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
+    """Validate and return pull quote only if it's from a video/podcast transcript.
+    Rejects quotes sourced from articles/LinkedIn — Gemini often ignores prompt rules."""
+    if not pq_raw:
+        return None
+
+    if isinstance(pq_raw, dict) and pq_raw.get("quote"):
+        quote_text = pq_raw["quote"]
+        source_str = (pq_raw.get("source") or "").lower()
+    elif isinstance(pq_raw, str) and pq_raw:
+        quote_text = pq_raw
+        source_str = ""
+    else:
+        return None
+
+    # Reject if source attribution mentions LinkedIn or article
+    reject_keywords = ["linkedin", "article", "blog", "post"]
+    if any(kw in source_str for kw in reject_keywords):
+        logger.info(f"Pull quote rejected: source contains non-transcript keyword ({source_str[:80]})")
+        return None
+
+    # Accept if source mentions video/podcast/youtube/interview
+    accept_keywords = ["youtube", "podcast", "interview", "keynote", "video", "panel", "talk", "conference"]
+    if any(kw in source_str for kw in accept_keywords):
+        return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+
+    # No clear source — verify quote text exists in a transcript
+    for p in artifacts.podcasts:
+        if p.transcript_text and quote_text[:40].lower() in p.transcript_text.lower():
+            return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+    for v in artifacts.videos:
+        if v.transcript_text and quote_text[:40].lower() in v.transcript_text.lower():
+            return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+
+    logger.info(f"Pull quote rejected: not found in any transcript ({quote_text[:60]}...)")
+    return None
+
+
 def _build_source_material(artifacts: CollectedArtifacts) -> str:
     """Build the source material block shared by both prompts.
 
@@ -148,6 +186,7 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
             max_output_tokens=settings.gemini_max_output_tokens,
             temperature=settings.gemini_temperature,
             response_mime_type="application/json",
+            thinking_config=types.ThinkingConfig(thinking_budget=4096),
         ),
     )
     text = response.text
@@ -551,10 +590,12 @@ This is the "wow" moment — displayed prominently at the top of the report.
 
 RULES:
 - Must be VERBATIM from a video transcript or podcast transcript (15-40 words)
+- STRONGLY prefer quotes from podcast/interview transcripts over any other source
+- NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
 - Choose a quote that reveals their thinking, philosophy, values, or pressure
 - Pick quotes where the person speaks with conviction or candor — not generic platitudes
 - Include the source as: "Source Title - Platform - Date - Timestamp"
-- If no direct quotes exist in the source material, return null
+- If no podcast/video transcripts are available, return null
 
 Output: {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS"}
 or null if no direct quotes available.""")
@@ -1019,10 +1060,12 @@ SECTION RULES:
 
 0. PULL QUOTE (1 standout direct quote):
    - The single most revealing, powerful direct quote from the executive
-   - Must be VERBATIM from a video transcript or article (15-40 words)
+   - Must be VERBATIM from a podcast transcript or video transcript (15-40 words)
+   - STRONGLY prefer quotes from podcast/interview transcripts over any other source
+   - NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
    - Choose a quote that reveals their thinking, philosophy, or pressure
    - This is displayed prominently in the UI — pick the one that makes a sales rep say "now I understand this person"
-   - If no direct quotes exist (company-only search or no interviews), set to null
+   - If no podcast/video transcripts exist (company-only search or no interviews), set to null
    - Do NOT fabricate or paraphrase — verbatim only
 
 1. BACKGROUND (max 6 bullets):
@@ -1218,6 +1261,29 @@ SECTION RULES (LOW SIGNAL MODE):
 #  Build typed objects from raw JSON
 # ═══════════════════════════════════════════════════════════
 
+_CATEGORY_ALIASES = {
+    "STRATEGY": "MARKET",
+    "COMPETITIVE": "MARKET",
+    "COMPETITION": "MARKET",
+    "LEADERSHIP": "BACKGROUND",
+    "INNOVATION": "PRODUCT",
+    "TECHNOLOGY": "PRODUCT",
+    "TECH": "PRODUCT",
+    "AI": "PRODUCT",
+    "RISK": "CHALLENGE",
+    "THREAT": "CHALLENGE",
+    "OPPORTUNITY": "GROWTH",
+    "EXPANSION": "GROWTH",
+    "REVENUE": "TRACTION",
+    "PERFORMANCE": "TRACTION",
+    "CULTURE": "BACKGROUND",
+    "VISION": "GROWTH",
+    "OPERATIONS": "TENSION",
+    "EXECUTION": "TENSION",
+    "PRESSURE": "TENSION",
+}
+
+
 def _build_signals(raw_signals: list) -> List[Signal]:
     """Convert raw Gemini output into Signal objects, enforcing max 5."""
     signals = []
@@ -1226,15 +1292,24 @@ def _build_signals(raw_signals: list) -> List[Signal]:
             continue
 
         category = (raw.get("category") or "").upper()
+        # Map common Gemini category variants to our valid set
         if category not in CATEGORY_ICONS:
-            continue
+            mapped = _CATEGORY_ALIASES.get(category)
+            if mapped:
+                logger.info(f"Signal {i}: mapped category '{category}' -> '{mapped}'")
+                category = mapped
+            else:
+                logger.warning(f"Signal {i} skipped: unknown category '{category}' (valid: {list(CATEGORY_ICONS.keys())})")
+                continue
 
         signal_text = (raw.get("signal") or "").strip()
         if not signal_text:
+            logger.warning(f"Signal {i} skipped: empty signal text")
             continue
 
         quote = (raw.get("quote") or "").strip()
         if not quote:
+            logger.warning(f"Signal {i} skipped: empty quote")
             continue
 
         source_raw = raw.get("source") or {}
@@ -1436,12 +1511,8 @@ async def run_quick_prep_only(
 
             executive_summary = parsed.get("executive_summary") or None
 
-            # Pull quote
-            pq_raw = parsed.get("pull_quote")
-            if isinstance(pq_raw, dict) and pq_raw.get("quote"):
-                pull_quote = {"quote": pq_raw["quote"], "source": pq_raw.get("source") or ""}
-            elif isinstance(pq_raw, str) and pq_raw:
-                pull_quote = {"quote": pq_raw, "source": ""}
+            # Pull quote — validated against transcripts only
+            pull_quote = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
 
             # Recent moves
             rm_raw = parsed.get("recent_moves") or []
@@ -1576,8 +1647,13 @@ async def synthesize(
         try:
             parsed = _parse_json_safe(quick_result.strip())
             if isinstance(parsed, dict):
+                logger.info(f"QP parsed keys: {list(parsed.keys())}")
                 prior_role = parsed.get("prior_role")
                 raw_signals = parsed.get("signals") or []
+                logger.info(f"QP raw_signals count: {len(raw_signals)}")
+                if raw_signals:
+                    sample = raw_signals[0]
+                    logger.info(f"QP first signal keys: {list(sample.keys()) if isinstance(sample, dict) else type(sample)}")
 
                 # Executive Orientation — new flexible bullets + key_pressure
                 eo_raw = parsed.get("executive_orientation")
@@ -1599,12 +1675,8 @@ async def synthesize(
 
                 executive_summary = parsed.get("executive_summary") or None
 
-                # Pull quote from QP
-                pq_raw = parsed.get("pull_quote")
-                if isinstance(pq_raw, dict) and pq_raw.get("quote"):
-                    qp_pull_quote = {"quote": pq_raw["quote"], "source": pq_raw.get("source") or ""}
-                elif isinstance(pq_raw, str) and pq_raw:
-                    qp_pull_quote = {"quote": pq_raw, "source": ""}
+                # Pull quote from QP — validated against transcripts only
+                qp_pull_quote = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
 
                 # Recent moves
                 rm_raw = parsed.get("recent_moves") or []
@@ -1631,6 +1703,15 @@ async def synthesize(
             else:
                 raw_signals = []
             signals = _build_signals(raw_signals)
+            logger.info(f"QP built signals: {len(signals)} from {len(raw_signals)} raw")
+            if raw_signals and not signals:
+                # Debug: log why signals were all filtered out
+                for i, rs in enumerate(raw_signals[:3]):
+                    if isinstance(rs, dict):
+                        cat = (rs.get("category") or "").upper()
+                        sig_text = bool((rs.get("signal") or "").strip())
+                        quote = bool((rs.get("quote") or "").strip())
+                        logger.warning(f"QP signal {i} filtered: category='{cat}' valid={cat in CATEGORY_ICONS}, has_signal={sig_text}, has_quote={quote}")
             for i, sig in enumerate(signals, 1):
                 sig.id = i
         except Exception as e:
@@ -1683,12 +1764,8 @@ async def synthesize(
             parsed2 = _parse_json_safe(dossier_result.strip())
             if isinstance(parsed2, dict):
                 dossier = _build_dossier(parsed2)
-                # Extract pull quote from dossier response
-                pq2 = parsed2.get("pull_quote")
-                if isinstance(pq2, dict) and pq2.get("quote"):
-                    dossier_pull_quote = {"quote": pq2["quote"], "source": pq2.get("source") or ""}
-                elif isinstance(pq2, str) and pq2:
-                    dossier_pull_quote = {"quote": pq2, "source": ""}
+                # Extract pull quote from dossier — validated against transcripts only
+                dossier_pull_quote = _validate_pull_quote(parsed2.get("pull_quote"), artifacts)
             else:
                 logger.warning("Dossier call returned non-dict, skipping")
         except Exception as e:

@@ -1,9 +1,9 @@
 """
-Podcast episode discovery via Serper/iTunes + ListenNotes scraping + Gemini transcription.
+Podcast episode discovery via iTunes/Serper + ListenNotes scraping + Gemini transcription.
 
 Pipeline:
-  1a. Serper search  →  site:listennotes.com results
-  1b. Fallback: iTunes/Apple Podcasts Search API (free, no key)
+  1a. iTunes/Apple Podcasts Search API (free, no key, returns direct audio URLs)
+  1b. Fallback: Serper search  →  site:listennotes.com results (needs scraping)
   2.  Scrape episode page  →  audio URL + metadata  (Serper results only)
   3.  Download audio from CDN  →  trim  →  Gemini transcription
 """
@@ -248,7 +248,7 @@ async def _itunes_search_podcasts(
 
 
 # ---------------------------------------------------------------------------
-# 1. Combined podcast search (Serper → iTunes fallback)
+# 1. Combined podcast search (iTunes → Serper fallback)
 # ---------------------------------------------------------------------------
 
 async def search_podcast_episodes(
@@ -258,21 +258,21 @@ async def search_podcast_episodes(
 ) -> Tuple[List[PodcastCandidate], str]:
     """
     Search for podcast episodes mentioning the person.
-    Tries Serper (site:listennotes.com) first; if 0 results, falls back to
-    the iTunes/Apple Podcasts Search API (free, no key needed).
+    Tries iTunes first (free, direct audio URLs); if 0 results, falls back to
+    Serper (site:listennotes.com, requires scraping for audio URLs).
 
-    Returns (candidates, search_method) where search_method is 'serper' or 'itunes'.
+    Returns (candidates, search_method) where search_method is 'itunes' or 'serper'.
     """
-    # Try Serper first
-    candidates = await _serper_search_podcasts(person_name, company_name, max_results)
-    if candidates:
-        return candidates, "serper"
-
-    # Fallback: iTunes/Apple Podcasts API
-    logger.info("Serper returned 0 podcast results, trying iTunes podcast search...")
+    # Try iTunes first (gives direct audio URLs, no scraping needed)
     candidates = await _itunes_search_podcasts(person_name, company_name, max_results)
     if candidates:
         return candidates, "itunes"
+
+    # Fallback: Serper → ListenNotes (needs scraping for audio URLs)
+    logger.info("iTunes returned 0 podcast results, trying Serper podcast search...")
+    candidates = await _serper_search_podcasts(person_name, company_name, max_results)
+    if candidates:
+        return candidates, "serper"
 
     return [], "none"
 

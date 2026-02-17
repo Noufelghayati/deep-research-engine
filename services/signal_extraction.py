@@ -50,9 +50,10 @@ def _extract_sync(source_text: str, source_context: str) -> list:
             contents=f"{source_context}\n\nSOURCE CONTENT:\n{source_text[:5000]}",
             config=types.GenerateContentConfig(
                 system_instruction=_SYSTEM_PROMPT,
-                max_output_tokens=2048,
+                max_output_tokens=8192,
                 temperature=0.2,
                 response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=4096),
             ),
         )
         raw = json.loads(response.text.strip())

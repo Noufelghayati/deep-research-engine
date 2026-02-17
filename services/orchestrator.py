@@ -41,7 +41,7 @@ async def _step0_podcasts(
     after_source=None,
 ) -> None:
     """
-    Step 0: Podcast episode discovery via Serper + ListenNotes scraping.
+    Step 0: Podcast episode discovery via iTunes (preferred) + Serper/ListenNotes fallback.
     Skipped if no webshare proxy or no target_name.
     """
     if not settings.webshare_proxy_url:
@@ -56,16 +56,10 @@ async def _step0_podcasts(
             await emit("log", step="step0", message="Skipped: no target name")
         return
 
-    if not settings.serper_api_key:
-        logger.info("Step 0 skipped: no Serper API key")
-        if emit:
-            await emit("log", step="step0", message="Skipped: no Serper API key")
-        return
-
     logger.info(f"Step 0: Podcast search for '{request.target_name}'")
     artifacts.steps_attempted.append("step0_podcasts")
 
-    # Search for podcast episodes (Serper first, then iTunes fallback)
+    # Search for podcast episodes (iTunes first, then Serper fallback)
     candidates, search_method = await search_podcast_episodes(
         request.target_name,
         request.target_company,
@@ -108,9 +102,8 @@ async def _step0_podcasts(
 
             if not scraped or not scraped.get("audio_url"):
                 if emit:
-                    await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\"")
-                # Still add to artifacts (without transcript)
-                artifacts.podcasts.append(podcast)
+                    await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\" — skipping")
+                # Don't add to artifacts — useless without audio/transcript
                 continue
 
             # Update podcast with scraped metadata
@@ -406,7 +399,8 @@ def _build_source_list(artifacts):
 async def run_research(request: ResearchRequest, on_progress=None) -> ResearchResponse:
     """
     Execute the full research pipeline:
-      Step 0 (podcasts) -> Step 1 (person YouTube) -> Step 2 (company fallback) -> Step 3 (articles) -> Synthesis
+      Podcasts + Articles + Person YouTube (all parallel) -> Company fallback -> Synthesis
+    Articles are fast (~5-7s) and fire the first Quick Prep while podcasts/videos run.
     Enforces pipeline_timeout_sec. Tracks boring-VP and common-name edge cases.
     """
     pipeline_start = time.time()
@@ -467,20 +461,13 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         async def _do_qp():
             nonlocal _qp_task, _qp_needs_rerun
             try:
-                # Snapshot sources to avoid mutation during executor call
-                all_src = list(artifacts.podcasts) + list(artifacts.videos) + list(artifacts.articles)
-                await extract_signals_for_sources(
-                    all_src,
-                    artifacts.person_name or "N/A",
-                    artifacts.company_name,
-                )
-
                 # Emit updated source list for citation linking
                 sl = _build_source_list(artifacts)
                 if sl:
                     await emit("sources", sources=sl)
 
-                # Run Quick Prep with current sources
+                # Run Quick Prep directly — skip signal extraction for speed
+                # (full extraction happens before final synthesis)
                 ppc = sum(1 for p in artifacts.podcasts if p.is_person_match)
                 pvc = sum(1 for v in artifacts.videos if v.is_person_match)
                 has_person = pvc > 0 or ppc > 0
@@ -503,95 +490,105 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
 
         _qp_task = asyncio.create_task(_do_qp())
 
-    # ── Step 0: Podcast Search ──
+    # ── Podcasts + Articles + Person YouTube in parallel ──
+    # Articles are fast (~5-7s) → fires first QP while podcasts transcribe (~30s+)
+    # Person YouTube runs concurrently (independent search + transcripts)
     await emit("step", step="step0", status="searching", message="Searching for podcast episodes...")
-    try:
-        await asyncio.wait_for(
-            _step0_podcasts(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
-            timeout=_time_left(),
-        )
-    except asyncio.TimeoutError:
-        logger.warning(f"Pipeline timeout during step 0 (podcasts) at {_elapsed():.1f}s")
-        timed_out = True
-        warnings.append("Partial research \u2014 showing available signals")
+    await emit("step", step="step3", status="searching", message="Searching for articles...")
+    await emit("step", step="step1", status="searching", message="Searching for person videos...")
 
-    for p in artifacts.podcasts:
-        await emit("found", kind="podcast", title=p.title, score=round(p.match_score, 2))
-    if artifacts.podcasts:
-        await emit("step", step="step0", status="done", message=f"Found {len(artifacts.podcasts)} podcast episode(s)")
-    else:
-        await emit("step", step="step0", status="done", message="No podcast episodes found")
+    async def _run_podcasts():
+        nonlocal timed_out
+        try:
+            await asyncio.wait_for(
+                _step0_podcasts(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
+                timeout=_time_left(),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Pipeline timeout during podcasts at {_elapsed():.1f}s")
+            timed_out = True
+            warnings.append("Partial research \u2014 showing available signals")
 
-    # ── Step 1: Person-level YouTube ──
-    if not timed_out:
-        await emit("step", step="step1", status="searching", message="Searching for person videos...")
-    try:
-        step1_strength = await asyncio.wait_for(
-            _step1_person_youtube(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
-            timeout=_time_left(),
-        ) if not timed_out else 0.0
-    except asyncio.TimeoutError:
-        logger.warning(f"Pipeline timeout during step 1 at {_elapsed():.1f}s")
-        step1_strength = 0.0
-        timed_out = True
-        warnings.append("Partial research \u2014 showing available signals")
+        for p in artifacts.podcasts:
+            await emit("found", kind="podcast", title=p.title, score=round(p.match_score, 2))
+        if artifacts.podcasts:
+            await emit("step", step="step0", status="done", message=f"Found {len(artifacts.podcasts)} podcast episode(s)")
+        else:
+            await emit("step", step="step0", status="done", message="No podcast episodes found")
 
-    person_video_count = len(artifacts.videos)
-    for v in artifacts.videos:
-        await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
-    await emit("step", step="step1", status="done", message=f"Found {person_video_count} person video(s)")
+    async def _run_articles():
+        try:
+            await asyncio.wait_for(
+                _step3_articles(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
+                timeout=max(_time_left(), 15),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Pipeline timeout during articles at {_elapsed():.1f}s")
+            if "Partial research" not in str(warnings):
+                warnings.append("Partial research \u2014 showing available signals")
 
-    # ── Step 2: Company leadership fallback (if Step 1 weak) ──
-    if not timed_out and step1_strength < settings.weak_result_threshold:
+        for a in artifacts.articles:
+            await emit("found", kind="article", title=a.title)
+        if artifacts.articles:
+            await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
+        else:
+            await emit("step", step="step3", status="done", message="No articles found")
+
+    async def _run_person_youtube():
+        """Returns step1_strength for company fallback decision."""
+        try:
+            strength = await asyncio.wait_for(
+                _step1_person_youtube(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
+                timeout=max(_time_left(), 30),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Pipeline timeout during step 1 at {_elapsed():.1f}s")
+            strength = 0.0
+
+        person_video_count = len(artifacts.videos)
+        for v in artifacts.videos:
+            await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
+        await emit("step", step="step1", status="done", message=f"Found {person_video_count} person video(s)")
+        return strength
+
+    _, _, step1_strength = await asyncio.gather(
+        _run_podcasts(), _run_articles(), _run_person_youtube()
+    )
+
+    # ── Company leadership fallback (if Step 1 weak — runs after gather) ──
+    if step1_strength < settings.weak_result_threshold:
         prev_count = len(artifacts.videos)
         await emit("step", step="step2", status="searching", message="Searching for company leadership videos...")
         try:
             await asyncio.wait_for(
                 _step2_company_leadership(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
-                timeout=_time_left(),
+                timeout=max(_time_left(), 30),  # at least 30s for fallback videos
             )
         except asyncio.TimeoutError:
             logger.warning(f"Pipeline timeout during step 2 at {_elapsed():.1f}s")
-            timed_out = True
-            warnings.append("Partial research \u2014 showing available signals")
         new_videos = artifacts.videos[prev_count:]
         for v in new_videos:
             await emit("found", kind="video", title=v.title, score=round(v.match_score, 2))
         await emit("step", step="step2", status="done", message=f"Found {len(new_videos)} leadership video(s)")
 
     # Detect "boring VP" — no person-level interviews found
+    person_video_count = sum(1 for v in artifacts.videos if v.is_person_match)
     person_podcast_count = sum(1 for p in artifacts.podcasts if p.is_person_match)
     has_person_content = person_video_count > 0 or person_podcast_count > 0
     if not has_person_content and request.target_name:
         warnings.append("No direct interviews found \u2014 signals derived from company-level sources and role context")
 
-    # ── Step 3: Articles (always runs, even after timeout — articles are fast) ──
-    await emit("step", step="step3", status="searching", message="Searching for articles...")
-    try:
-        await asyncio.wait_for(
-            _step3_articles(request, artifacts, emit=_emit, after_source=_fire_incremental_qp),
-            timeout=max(_time_left(), 15),  # give articles at least 15s even after timeout
-        )
-    except asyncio.TimeoutError:
-        logger.warning(f"Pipeline timeout during step 3 at {_elapsed():.1f}s")
-        if "Partial research" not in str(warnings):
-            warnings.append("Partial research \u2014 showing available signals")
-
-    for a in artifacts.articles:
-        await emit("found", kind="article", title=a.title)
-    if artifacts.articles:
-        await emit("step", step="step3", status="done", message=f"Found {len(artifacts.articles)} article(s)")
-    else:
-        await emit("step", step="step3", status="done", message="Using video sources only")
-
-    # ── Cancel incremental QP before bulk extraction + final synthesis ──
-    _qp_needs_rerun = False  # prevent chain rerun after cancel
+    # ── Let incremental QP finish (gives user something to read during synthesis) ──
+    _qp_needs_rerun = False  # prevent chain rerun — no more incremental updates
     if _qp_task and not _qp_task.done():
-        _qp_task.cancel()
         try:
-            await _qp_task
-        except (asyncio.CancelledError, Exception):
-            pass
+            await asyncio.wait_for(_qp_task, timeout=20)
+        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+            _qp_task.cancel()
+            try:
+                await _qp_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     # ── Signal Extraction (per-source, parallel) ──
     total_sources = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
