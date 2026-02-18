@@ -176,7 +176,7 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
     return "\n\n".join(sections)
 
 
-def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
+def _call_gemini_sync(system_prompt: str, content_prompt: str, thinking_budget: int = 4096) -> str:
     """Synchronous Gemini call — run via executor for async compat."""
     response = client.models.generate_content(
         model=settings.gemini_model,
@@ -186,7 +186,7 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str) -> str:
             max_output_tokens=settings.gemini_max_output_tokens,
             temperature=settings.gemini_temperature,
             response_mime_type="application/json",
-            thinking_config=types.ThinkingConfig(thinking_budget=4096),
+            thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget),
         ),
     )
     text = response.text
@@ -901,6 +901,384 @@ EVERY signal must be framed around the person, never the company alone.""")
 
 
 # ═══════════════════════════════════════════════════════════
+#  Quick Prep Sub-Prompts (for parallel execution)
+# ═══════════════════════════════════════════════════════════
+
+def _qp_target_block(request: ResearchRequest) -> str:
+    """Shared target context block for all QP sub-prompts."""
+    lines = [f"TARGET COMPANY: {request.target_company}"]
+    if request.target_name:
+        lines.append(f"TARGET PERSON: {request.target_name}")
+    if request.target_title:
+        lines.append(f"PERSON TITLE: {request.target_title}")
+    return "\n".join(lines)
+
+
+def _build_qp_sub_a_system(
+    request: ResearchRequest, has_person_content: bool, low_signal: bool = False
+) -> str:
+    """Sub-prompt A: Executive Snapshot + Recent Moves + prior_role (fast, ~3-5s)."""
+    lines = [
+        "You are an EXECUTIVE INTELLIGENCE engine for B2B sales reps.",
+        "",
+        _qp_target_block(request),
+    ]
+
+    if low_signal and request.target_name:
+        lines.append("")
+        lines.append("CRITICAL CONTEXT: Very limited direct public signal exists for this person.")
+        lines.append("Be honest about confidence levels. Label inferences clearly.")
+    elif not has_person_content and request.target_name:
+        lines.append("")
+        lines.append("WARNING: No direct interviews with this person were found.")
+        lines.append("Derive intelligence from company-level sources and role context.")
+
+    lines.append("")
+    if low_signal:
+        lines.append("""═══════════════════════════════════════
+TASK 1: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
+═══════════════════════════════════════
+
+Write ONE short sentence framing what we know about this person's posture.
+
+Examples:
+✓ "[Title] at [Company] navigating [key role-typical challenge] with limited public signal."
+✓ "[Title] operating in [growth/transition context] — direct executive content unavailable."
+
+RULES:
+- ONE sentence only, maximum 25 words
+- Acknowledge limited signal honestly
+- Do NOT speculate on psychology""")
+    else:
+        lines.append("""═══════════════════════════════════════
+TASK 1: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
+═══════════════════════════════════════
+
+Write ONE punchy sentence that captures the executive's current posture in context.
+This appears directly under their name/title — a sales rep glances at it in 2 seconds.
+
+Format: "[Role-descriptor] [doing what] [in what context/tension]"
+
+Examples:
+✓ "Founder-CEO reinvesting break-even earnings into an aggressive AI/robotics pivot."
+✓ "New CEO (8 months) betting on aggressive retail expansion while proving enterprise viability."
+
+RULES:
+- ONE sentence only, maximum 25 words
+- Skip the person's name (it's already shown above)
+- Lead with their strategic posture, not their biography
+- Include the core tension or trade-off if possible""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+TASK 2: RECENT MOVES (last 90 days, max 4 events)
+═══════════════════════════════════════
+
+Identify up to 4 concrete, factual events involving this person or their company
+from the LAST 90 DAYS. These must be real events with specific dates found in sources.
+
+RULES:
+- ONLY include events with clear dates within the last 90 days from today
+- If no events from the last 90 days exist in sources, return an EMPTY array []
+- Never fabricate dates or events
+- Max 15 words per event description
+- Each event must be factual (funding, product launch, hire, partnership, milestone)
+- Include source URL and title for each event""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+TASK 3: PRIOR ROLE
+═══════════════════════════════════════
+
+Identify their IMMEDIATELY PREVIOUS role (the one right before their current position).
+NOT a role from 2-3 positions ago. If unknown from sources, return null.""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+OUTPUT FORMAT (JSON object):
+═══════════════════════════════════════
+{
+  "prior_role": "CMO, Impossible Foods",
+  "executive_summary": "Single-sentence snapshot, max 25 words",
+  "recent_moves": [
+    {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}
+  ]
+}
+
+If no recent moves, return "recent_moves": [].
+If prior role unknown, return "prior_role": null.""")
+
+    return "\n".join(lines)
+
+
+def _build_qp_sub_b_system(
+    request: ResearchRequest, has_person_content: bool, low_signal: bool = False
+) -> str:
+    """Sub-prompt B: Signals + Orientation + Opening Moves (heavy analysis, ~10-15s)."""
+    lines = [
+        "You are an EXECUTIVE INTELLIGENCE engine for B2B sales reps.",
+        "",
+        "YOUR JOB: Reveal how this executive THINKS, what PRESSURES they're under,",
+        "and where they're VULNERABLE. NOT company news summaries.",
+        "",
+        "The bar: An SDR reads this and thinks 'I understand how this person thinks",
+        "and where they're vulnerable' — NOT 'I know what this company announced.'",
+        "",
+        "PERSON-FIRST RULE (MANDATORY when target person is specified):",
+        "The individual MUST always be the primary object of analysis.",
+        "Company context exists ONLY to illuminate the PERSON's world.",
+        "Every signal and every orientation line must be ABOUT this person.",
+        "",
+        "SYNTHESIS PROCESS:",
+        "1. Extract all signals from ALL sources",
+        "2. For each signal, ask: What does this reveal about how they think?",
+        "   What pressure are they under? Where are they vulnerable?",
+        "3. Cluster overlapping themes across sources",
+        "4. Rank by: strategic insight value > frequency > recency",
+        "5. Generate final output from ranked clusters",
+        "",
+        _qp_target_block(request),
+    ]
+
+    if low_signal and request.target_name:
+        lines.append("")
+        lines.append("CRITICAL CONTEXT: Very limited direct public signal exists for this person.")
+        lines.append("There are NO direct interviews, podcast appearances, or keynotes available.")
+        lines.append("Build intelligence by combining role/title inference (clearly labeled) with company context.")
+        lines.append("Label all inferences: 'Inferred from role context' or 'Based on company positioning'")
+    elif not has_person_content and request.target_name:
+        lines.append("")
+        lines.append("WARNING: No direct interviews with this person were found.")
+        lines.append("Derive intelligence from company-level sources and role context.")
+        lines.append(f"Focus on what someone in the role of {request.target_title or 'executive'}")
+        lines.append("at this company would be navigating. Label role-inferred insights as such.")
+
+    # ── PART 1: Orientation ──
+    lines.append("")
+    if low_signal:
+        lines.append("""═══════════════════════════════════════
+PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
+═══════════════════════════════════════
+
+Generate 3-5 Lead Orientation bullets with honest role-based inference.
+Each bullet MUST:
+- Represent a DIFFERENT strategic dimension
+- Acknowledge limited direct signal where appropriate
+- Label inferences: "Inferred from role context" or "Based on company positioning"
+- Convert available facts → implications
+
+Then add ONE Key Pressure line (role-inferred if no direct evidence).
+
+RULES:
+- Each bullet: max 20 words
+- No two bullets may address the same dimension
+- Be honest about confidence level
+- NEVER fabricate or speculate without evidence""")
+    else:
+        lines.append("""═══════════════════════════════════════
+PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
+═══════════════════════════════════════
+
+Generate 3-5 Lead Orientation bullets. Each bullet MUST:
+- Represent a DIFFERENT strategic dimension (from: capital allocation, product strategy,
+  market posture, execution risk, leadership bias, org maturity, competitive positioning, talent strategy)
+- Be grounded in explicit evidence from sources
+- Avoid repetition or paraphrasing of prior bullets
+- Convert fact → implication (surface pressure or strategic tension)
+
+If there is insufficient evidence for a dimension, omit it. Never fabricate.
+
+Then add ONE Key Pressure line: the single most important pressure or vulnerability
+this person faces, grounded in evidence. Cite the source if possible.
+
+RULES:
+- Each bullet: one concise sentence, max 20 words
+- No two bullets may address the same strategic dimension
+- Key Pressure: evidence-based, cite source when possible
+- NEVER fabricate or speculate without evidence""")
+
+    # ── PART 2: Signals ──
+    lines.append("")
+    if low_signal:
+        lines.append("""═══════════════════════════════════════
+PART 2: EXECUTIVE INTELLIGENCE SIGNALS (5 signals)
+═══════════════════════════════════════
+
+With limited person-level content, generate signals that:
+1. LEAD with what we know about the PERSON (even if minimal)
+2. Connect role context to likely operational focus
+3. Use company context to illuminate the person's likely challenges
+4. CLEARLY LABEL what is observed vs inferred
+
+SIGNAL COMPOSITION (5 signals):
+- Signal 1: Identity & role positioning (what we actually know about this person)
+- Signal 2: Likely operational focus based on role + company context (labeled inferred)
+- Signal 3: Market/competitive context THIS PERSON navigates (framed around the person)
+- Signal 4: Role-typical challenges and pressures (labeled inferred)
+- Signal 5: Company momentum that shapes this person's priorities (framed around person)
+
+SIGNAL CATEGORIES:
+🎯 BACKGROUND — identity, role context, career positioning
+🔧 PRODUCT — likely operational/product focus based on role
+💰 MARKET — market context this person operates in
+🚨 CHALLENGE — role-typical pressures and challenges
+⚖️ TENSION — likely tensions and trade-offs in this role
+
+Each signal: max 25 words.
+For quote field: use a relevant company quote if available, or write:
+  "No direct quote available — inferred from role context"
+For inferred signals, set source type to "article" and use the most relevant company source.""")
+    else:
+        lines.append("""═══════════════════════════════════════
+PART 2: EXECUTIVE INTELLIGENCE SIGNALS (5 signals)
+═══════════════════════════════════════
+
+You are extracting EXECUTIVE INTELLIGENCE, not company news.
+Each signal must reveal how this executive THINKS, what pressures they're under,
+and where they're vulnerable.
+
+SIGNAL FORMULA: [Action/Decision] + [Context/Pressure/Stakes] + [What It Reveals]
+
+BAD SIGNAL (just states what happened):
+❌ "Flashfood is scaling from 2,000 to 2,500 stores"
+
+GOOD SIGNAL (reveals patterns):
+✅ "Aggressive 25% expansion (2,000→2,500 by EOY) despite 8 months as CEO — high risk/reward growth posture with execution exposure"
+
+SIGNAL CATEGORIES (choose based on what the signal REVEALS):
+🚀 GROWTH — expansion, scaling, market entry, hiring
+💰 MARKET — partnerships, funding, deals, competitive positioning
+🔧 PRODUCT — tech priorities, product strategy, operational focus
+🎯 BACKGROUND — previous roles, philosophy, approach that shapes decisions
+⚖️ TENSION — strategic trade-offs, competing priorities, balance points
+🚨 CHALLENGE — stated problems, pain points, risks, vulnerabilities
+
+REQUIRED COMPOSITION (5 signals, each a DIFFERENT category):
+- 1 signal showing growth/expansion approach + pressure it creates
+- 1 signal showing strategic positioning/market action + stakes involved
+- 1 signal showing operational/product priorities + trade-offs
+- 1 signal showing background/philosophy + how it shapes decisions
+- 1 signal showing commercial/market tension + vulnerability
+NEVER repeat the same category.
+
+CRITICAL RULES:
+1. Every signal MUST show PRESSURE, RISK, or TRADE-OFF.
+2. Be specific with numbers, timelines, stakes.
+3. Max 25 words per signal. Each signal must be a different dimension.
+4. Each quote must be 15-40 words from source material.
+5. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source.
+6. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts.""")
+
+    # ── PART 3: Opening Moves ──
+    lines.append("")
+    if low_signal:
+        lines.append("""═══════════════════════════════════════
+PART 3: OPENING MOVES (3 conversation directions)
+═══════════════════════════════════════
+
+Generate 3 conversation directions even with limited signal.
+Frame as genuine discovery questions (we don't have deep signal, so ASK).
+
+Format: "[Lead with X] — [ask about Y]" (max 25 words per suggestion)
+
+RULES:
+- Maximum 25 words per suggestion
+- Direction, not a script
+- Reference company context the person operates in
+- Each angle targets a different dimension""")
+    else:
+        lines.append("""═══════════════════════════════════════
+PART 3: OPENING MOVES (3 conversation directions)
+═══════════════════════════════════════
+
+Generate exactly 3 conversation opening DIRECTIONS (not scripts).
+Each move has an "angle" (2-4 word label) and a "suggestion" (max 25 words).
+
+The suggestion is a tactical direction the sales rep adapts to their own voice.
+Format: "[Lead with X] — [ask about / reference Y]."
+
+RULES:
+- Maximum 25 words per suggestion
+- Direction, not a script — tell the rep WHAT to reference and WHAT to ask
+- Format: "[Lead with X] — [ask about / reference Y]"
+- Each angle must target a DIFFERENT dimension
+- Reference specific facts/signals from the research""")
+
+    lines.append("")
+    lines.append("""═══════════════════════════════════════
+OUTPUT FORMAT (JSON object):
+═══════════════════════════════════════
+{
+  "executive_orientation": {
+    "bullets": [
+      "Aggressive expansion: scaling from 2,000 to 2,500 stores in 12 months",
+      "Marketing-led operator: leads with sustainability narrative over cost savings"
+    ],
+    "key_pressure": "Execution risk from 25% store growth with unproven infrastructure [VIDEO 1]"
+  },
+  "opening_moves": [
+    {"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."},
+    {"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like."},
+    {"angle": "Mission vs. Margin", "suggestion": "Lead with triple bottom line narrative — ask how impact and margin compete."}
+  ],
+  "signals": [
+    {
+      "category": "GROWTH",
+      "signal": "Aggressive 25% expansion despite 8 months as CEO — execution exposure",
+      "quote": "It's over 2,000 and on any given day probably getting closer to 2,500...",
+      "source": {
+        "type": "video",
+        "title": "Jordan Schenck CEO Interview",
+        "url": "https://youtube.com/watch?v=abgKopCIDOY",
+        "timestamp": "08:30",
+        "date": "Apr 2, 2025"
+      }
+    }
+  ]
+}""")
+
+    return "\n".join(lines)
+
+
+def _build_qp_sub_c_system(request: ResearchRequest) -> str:
+    """Sub-prompt C: Pull Quote (fast, ~3-5s). Only used when transcripts available."""
+    lines = [
+        "You are an EXECUTIVE INTELLIGENCE engine for B2B sales reps.",
+        "",
+        _qp_target_block(request),
+        "",
+        """═══════════════════════════════════════
+TASK: Select the SINGLE most revealing direct quote from the executive
+═══════════════════════════════════════
+
+Select the single most revealing, powerful direct quote from the executive.
+This is the "wow" moment — displayed prominently at the top of the report.
+
+RULES:
+- Must be VERBATIM from a video transcript or podcast transcript (15-40 words)
+- STRONGLY prefer quotes from podcast/interview transcripts over any other source
+- NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
+- Choose a quote that reveals their thinking, philosophy, values, or pressure
+- Pick quotes where the person speaks with conviction or candor — not generic platitudes
+- Include the source as: "Source Title - Platform - Date - Timestamp"
+- If no podcast/video transcripts are available, return null
+
+═══════════════════════════════════════
+OUTPUT FORMAT (JSON object):
+═══════════════════════════════════════
+{
+  "pull_quote": {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS"}
+}
+
+If no direct quotes available, return:
+{
+  "pull_quote": null
+}""",
+    ]
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════
 #  CALL 2: Full Dossier
 # ═══════════════════════════════════════════════════════════
 
@@ -1445,11 +1823,16 @@ async def run_quick_prep_only(
     artifacts: CollectedArtifacts,
     request: ResearchRequest,
     has_person_content: bool = True,
+    on_section=None,
 ) -> Optional[dict]:
     """
-    Run Quick Prep synthesis only (no dossier).
-    Called incrementally as sources are gathered.
-    Returns a dict suitable for SSE partial emission, or None on failure.
+    Run Quick Prep as 3 parallel Gemini calls for faster streaming.
+    Each sub-call focuses on a subset of sections:
+      Sub A (fast): Executive Snapshot + Recent Moves + prior_role
+      Sub B (heavy): Signals + Orientation + Opening Moves
+      Sub C (fast): Pull Quote
+    As each completes, on_section(merged_dict) is called for SSE emission.
+    Returns the final merged dict, or None on failure.
     """
     source_material = _build_source_material(artifacts)
     if source_material == "No sources were found.":
@@ -1457,111 +1840,27 @@ async def run_quick_prep_only(
 
     loop = asyncio.get_event_loop()
     signal_strength = _assess_signal_strength(artifacts, request)
+    low_signal = signal_strength == "low" and bool(request.target_name)
 
-    if signal_strength == "low" and request.target_name:
-        quick_system = _build_quick_prep_system_low_signal(request)
-    else:
-        quick_system = _build_quick_prep_system(request, has_person_content)
+    # Build sub-prompts
+    sys_a = _build_qp_sub_a_system(request, has_person_content, low_signal)
+    sys_b = _build_qp_sub_b_system(request, has_person_content, low_signal)
+    content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
 
-    quick_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
-
-    try:
-        raw = await loop.run_in_executor(
-            None, _call_gemini_sync, quick_system, quick_content
-        )
-    except Exception as e:
-        logger.error(f"Incremental Quick Prep Gemini error: {e}")
-        return None
-
-    # Parse
-    prior_role = None
-    signals = []
-    executive_orientation = None
-    executive_summary = None
-    opening_moves = []
-    pull_quote = None
-    recent_moves = []
-
-    try:
-        parsed = _parse_json_safe(raw.strip())
-        # Unwrap single-element array (Gemini 3 sometimes wraps output in [])
-        if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
-            parsed = parsed[0]
-        if isinstance(parsed, dict):
-            prior_role = parsed.get("prior_role")
-            raw_signals = parsed.get("signals") or []
-
-            # Executive Orientation — new flexible bullets + key_pressure
-            eo_raw = parsed.get("executive_orientation")
-            if isinstance(eo_raw, dict):
-                raw_bullets = eo_raw.get("bullets") or []
-                # Backward compat: if old fixed fields present, convert
-                if not raw_bullets and eo_raw.get("growth_posture"):
-                    raw_bullets = [
-                        v for v in [
-                            eo_raw.get("growth_posture"),
-                            eo_raw.get("functional_bias"),
-                            eo_raw.get("role_context"),
-                        ] if v
-                    ]
-                executive_orientation = ExecutiveOrientation(
-                    bullets=[b for b in raw_bullets if isinstance(b, str)][:5],
-                    key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
-                )
-
-            executive_summary = parsed.get("executive_summary") or None
-
-            # Pull quote — validated against transcripts only
-            pull_quote = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
-
-            # Recent moves
-            rm_raw = parsed.get("recent_moves") or []
-            for rm in rm_raw[:4]:
-                if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
-                    recent_moves.append({
-                        "event": rm["event"],
-                        "date": rm["date"],
-                        "source_url": rm.get("source_url") or "",
-                        "source_title": rm.get("source_title") or "",
-                    })
-
-            # Opening moves
-            raw_moves = parsed.get("opening_moves") or []
-            for move in raw_moves[:3]:
-                if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
-                    opening_moves.append(OpeningMove(
-                        angle=move["angle"],
-                        suggestion=move["suggestion"],
-                    ))
-
-        elif isinstance(parsed, list):
-            raw_signals = parsed
-        else:
-            raw_signals = []
-
-        signals = _build_signals(raw_signals)
-        for i, sig in enumerate(signals, 1):
-            sig.id = i
-    except Exception as e:
-        logger.error(f"Incremental Quick Prep parse error: {e}")
-        return None
-
-    if not signals and not executive_orientation:
-        return None
-
-    return {
+    # Shared merge state — asyncio is single-threaded so no lock needed
+    merged = {
         "person": {
             "name": request.target_name,
             "title": request.target_title,
             "company": request.target_company,
-            "prior_role": prior_role,
-            "executive_summary": executive_summary,
+            "prior_role": None,
+            "executive_summary": None,
         },
-        "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
-        "recent_moves": recent_moves,
-        "signals": [s.model_dump() for s in signals],
-        "opening_moves": [m.model_dump() for m in opening_moves],
-        "pull_quote": pull_quote,
+        "executive_orientation": None,
+        "recent_moves": [],
+        "signals": [],
+        "opening_moves": [],
+        "pull_quote": None,
         "dossier": None,
         "warnings": [],
         "sources_analyzed": {
@@ -1570,6 +1869,126 @@ async def run_quick_prep_only(
             "articles": len(artifacts.articles),
         },
     }
+    has_any = False
+
+    async def _run_sub_a():
+        """Snapshot + Recent Moves + prior_role — fast."""
+        nonlocal has_any
+        try:
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_a, content, 1024
+            )
+            parsed = _parse_json_safe(raw.strip())
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            if isinstance(parsed, dict):
+                merged["person"]["prior_role"] = parsed.get("prior_role")
+                merged["person"]["executive_summary"] = parsed.get("executive_summary")
+                rm_raw = parsed.get("recent_moves") or []
+                recent_moves = []
+                for rm in rm_raw[:4]:
+                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                        recent_moves.append({
+                            "event": rm["event"],
+                            "date": rm["date"],
+                            "source_url": rm.get("source_url") or "",
+                            "source_title": rm.get("source_title") or "",
+                        })
+                merged["recent_moves"] = recent_moves
+                has_any = True
+                logger.info("QP Sub A complete (snapshot + recent moves)")
+                if on_section:
+                    await on_section(dict(merged))
+        except Exception as e:
+            logger.error(f"QP Sub A error: {e}")
+
+    async def _run_sub_b():
+        """Signals + Orientation + Opening Moves — heavy analysis."""
+        nonlocal has_any
+        try:
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_b, content, 4096
+            )
+            parsed = _parse_json_safe(raw.strip())
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            if isinstance(parsed, dict):
+                # Orientation
+                eo_raw = parsed.get("executive_orientation")
+                if isinstance(eo_raw, dict):
+                    raw_bullets = eo_raw.get("bullets") or []
+                    if not raw_bullets and eo_raw.get("growth_posture"):
+                        raw_bullets = [
+                            v for v in [
+                                eo_raw.get("growth_posture"),
+                                eo_raw.get("functional_bias"),
+                                eo_raw.get("role_context"),
+                            ] if v
+                        ]
+                    eo = ExecutiveOrientation(
+                        bullets=[b for b in raw_bullets if isinstance(b, str)][:5],
+                        key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
+                    )
+                    merged["executive_orientation"] = eo.model_dump()
+
+                # Signals
+                raw_signals = parsed.get("signals") or []
+                signals = _build_signals(raw_signals)
+                for i, sig in enumerate(signals, 1):
+                    sig.id = i
+                merged["signals"] = [s.model_dump() for s in signals]
+
+                # Opening moves
+                raw_moves = parsed.get("opening_moves") or []
+                om_list = []
+                for move in raw_moves[:3]:
+                    if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
+                        om_list.append(OpeningMove(
+                            angle=move["angle"],
+                            suggestion=move["suggestion"],
+                        ).model_dump())
+                merged["opening_moves"] = om_list
+
+                has_any = True
+                logger.info(f"QP Sub B complete (signals={len(signals)}, orientation, opening moves)")
+                if on_section:
+                    await on_section(dict(merged))
+        except Exception as e:
+            logger.error(f"QP Sub B error: {e}")
+
+    async def _run_sub_c():
+        """Pull Quote — fast, skipped in low-signal mode."""
+        nonlocal has_any
+        if low_signal:
+            return  # No transcripts to quote from
+        try:
+            sys_c = _build_qp_sub_c_system(request)
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_c, content, 1024
+            )
+            parsed = _parse_json_safe(raw.strip())
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            if isinstance(parsed, dict):
+                pq = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
+                if pq:
+                    merged["pull_quote"] = pq
+                    has_any = True
+                    logger.info("QP Sub C complete (pull quote)")
+                    if on_section:
+                        await on_section(dict(merged))
+                else:
+                    logger.info("QP Sub C: no valid pull quote found")
+        except Exception as e:
+            logger.error(f"QP Sub C error: {e}")
+
+    # Run all 3 sub-calls in parallel
+    await asyncio.gather(_run_sub_a(), _run_sub_b(), _run_sub_c())
+
+    if not has_any:
+        return None
+
+    return merged
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1583,57 +2002,39 @@ async def synthesize(
     on_partial=None,
 ) -> ResearchResponse:
     """
-    Two-pass Gemini synthesis with progressive streaming:
-      Call 1: Quick Prep signals + Executive Orientation
-      Call 2: Full Dossier (6 sections)
-    Both calls start in parallel. Quick Prep emits as soon as ready
-    via on_partial callback, before Dossier finishes.
+    Multi-pass Gemini synthesis with progressive streaming:
+      3 parallel QP sub-calls (Snapshot+Moves, Signals+Orientation, PullQuote)
+      + 1 Full Dossier call — all 4 run concurrently.
+    QP sections emit as each sub-call completes; Dossier awaited last.
     """
     source_material = _build_source_material(artifacts)
     loop = asyncio.get_event_loop()
 
     # Assess person signal strength for prompt routing
     signal_strength = _assess_signal_strength(artifacts, request)
+    low_signal = signal_strength == "low" and bool(request.target_name)
     logger.info(
         f"Person signal strength: {signal_strength} "
         f"(has_person_content={has_person_content}, "
         f"podcasts={len(artifacts.podcasts)}, "
         f"videos={len(artifacts.videos)}, articles={len(artifacts.articles)})"
     )
-
-    # Build prompts — use low-signal templates when person data is thin
-    if signal_strength == "low" and request.target_name:
+    if low_signal:
         logger.info("Using LOW-SIGNAL prompt templates (person-first, role-inferred)")
-        quick_system = _build_quick_prep_system_low_signal(request)
+
+    # Build sub-prompts for parallel QP
+    sys_a = _build_qp_sub_a_system(request, has_person_content, low_signal)
+    sys_b = _build_qp_sub_b_system(request, has_person_content, low_signal)
+    qp_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
+
+    # Build dossier prompt
+    if low_signal:
         dossier_system = _build_dossier_system_low_signal(request)
     else:
-        quick_system = _build_quick_prep_system(request, has_person_content)
         dossier_system = _build_dossier_system(request, has_person_content)
-
-    quick_content = f"Analyze the following sources and extract executive intelligence:\n\n{source_material}"
     dossier_content = f"Build a full executive intelligence dossier from these sources:\n\n{source_material}"
 
-    # ── Run both Gemini calls in parallel, emit Quick Prep first ──
-    async def _run_quick_prep():
-        return await loop.run_in_executor(
-            None, _call_gemini_sync, quick_system, quick_content
-        )
-
-    async def _run_dossier():
-        return await loop.run_in_executor(
-            None, _call_gemini_sync, dossier_system, dossier_content
-        )
-
-    quick_task = asyncio.create_task(_run_quick_prep())
-    dossier_task = asyncio.create_task(_run_dossier())
-
-    # Await Quick Prep first (Dossier continues running in background)
-    try:
-        quick_result = await quick_task
-    except Exception as e:
-        quick_result = e
-
-    # ── Parse Quick Prep ──
+    # Shared QP merge state
     prior_role = None
     signals = []
     executive_orientation = None
@@ -1641,28 +2042,86 @@ async def synthesize(
     opening_moves = []
     qp_pull_quote = None
     recent_moves = []
-    if isinstance(quick_result, Exception):
-        logger.error(f"Gemini Quick Prep error: {quick_result}")
-    else:
+    sources_info = {
+        "podcasts": len(artifacts.podcasts),
+        "videos": len(artifacts.videos),
+        "articles": len(artifacts.articles),
+    }
+
+    def _build_partial():
+        """Build partial data dict from current merged state."""
+        return {
+            "person": {
+                "name": request.target_name,
+                "title": request.target_title,
+                "company": request.target_company,
+                "prior_role": prior_role,
+                "executive_summary": executive_summary,
+            },
+            "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+            "recent_moves": recent_moves,
+            "signals": [s.model_dump() for s in signals],
+            "opening_moves": [m.model_dump() for m in opening_moves],
+            "pull_quote": qp_pull_quote,
+            "dossier": None,
+            "warnings": [],
+            "sources_analyzed": sources_info,
+        }
+
+    async def _emit_partial():
+        """Emit current QP state as a partial SSE event."""
+        if on_partial and (signals or executive_orientation or executive_summary or qp_pull_quote):
+            try:
+                await on_partial("quick_prep", _build_partial())
+            except Exception as e:
+                logger.warning(f"Failed to emit QP partial: {e}")
+
+    # ── QP Sub A: Snapshot + Recent Moves + prior_role (fast) ──
+    async def _run_sub_a():
+        nonlocal prior_role, executive_summary, recent_moves
         try:
-            parsed = _parse_json_safe(quick_result.strip())
-            # Unwrap single-element array (Gemini 3 sometimes wraps output in [])
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_a, qp_content, 1024
+            )
+            parsed = _parse_json_safe(raw.strip())
             if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
                 parsed = parsed[0]
             if isinstance(parsed, dict):
-                logger.info(f"QP parsed keys: {list(parsed.keys())}")
                 prior_role = parsed.get("prior_role")
-                raw_signals = parsed.get("signals") or []
-                logger.info(f"QP raw_signals count: {len(raw_signals)}")
-                if raw_signals:
-                    sample = raw_signals[0]
-                    logger.info(f"QP first signal keys: {list(sample.keys()) if isinstance(sample, dict) else type(sample)}")
+                executive_summary = parsed.get("executive_summary") or None
+                rm_raw = parsed.get("recent_moves") or []
+                rm_list = []
+                for rm in rm_raw[:4]:
+                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                        rm_list.append({
+                            "event": rm["event"],
+                            "date": rm["date"],
+                            "source_url": rm.get("source_url") or "",
+                            "source_title": rm.get("source_title") or "",
+                        })
+                recent_moves = rm_list
+                logger.info("Synthesis QP Sub A complete (snapshot + recent moves)")
+                await _emit_partial()
+        except Exception as e:
+            logger.error(f"Synthesis QP Sub A error: {e}")
 
-                # Executive Orientation — new flexible bullets + key_pressure
+    # ── QP Sub B: Signals + Orientation + Opening Moves (heavy) ──
+    async def _run_sub_b():
+        nonlocal signals, executive_orientation, opening_moves
+        try:
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_b, qp_content, 4096
+            )
+            parsed = _parse_json_safe(raw.strip())
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            if isinstance(parsed, dict):
+                logger.info(f"Synthesis QP Sub B parsed keys: {list(parsed.keys())}")
+
+                # Orientation
                 eo_raw = parsed.get("executive_orientation")
                 if isinstance(eo_raw, dict):
                     raw_bullets = eo_raw.get("bullets") or []
-                    # Backward compat: if old fixed fields present, convert
                     if not raw_bullets and eo_raw.get("growth_posture"):
                         raw_bullets = [
                             v for v in [
@@ -1676,80 +2135,75 @@ async def synthesize(
                         key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
                     )
 
-                executive_summary = parsed.get("executive_summary") or None
-
-                # Pull quote from QP — validated against transcripts only
-                qp_pull_quote = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
-
-                # Recent moves
-                rm_raw = parsed.get("recent_moves") or []
-                for rm in rm_raw[:4]:
-                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
-                        recent_moves.append({
-                            "event": rm["event"],
-                            "date": rm["date"],
-                            "source_url": rm.get("source_url") or "",
-                            "source_title": rm.get("source_title") or "",
-                        })
+                # Signals
+                raw_signals = parsed.get("signals") or []
+                logger.info(f"Synthesis QP Sub B raw_signals count: {len(raw_signals)}")
+                built = _build_signals(raw_signals)
+                logger.info(f"Synthesis QP Sub B built signals: {len(built)} from {len(raw_signals)} raw")
+                if raw_signals and not built:
+                    for i, rs in enumerate(raw_signals[:3]):
+                        if isinstance(rs, dict):
+                            cat = (rs.get("category") or "").upper()
+                            sig_text = bool((rs.get("signal") or "").strip())
+                            quote = bool((rs.get("quote") or "").strip())
+                            logger.warning(f"QP Sub B signal {i} filtered: category='{cat}' valid={cat in CATEGORY_ICONS}, has_signal={sig_text}, has_quote={quote}")
+                for i, sig in enumerate(built, 1):
+                    sig.id = i
+                signals = built
 
                 # Opening moves
                 raw_moves = parsed.get("opening_moves") or []
+                om_list = []
                 for move in raw_moves[:3]:
                     if isinstance(move, dict) and move.get("angle") and move.get("suggestion"):
-                        opening_moves.append(OpeningMove(
+                        om_list.append(OpeningMove(
                             angle=move["angle"],
                             suggestion=move["suggestion"],
                         ))
+                opening_moves = om_list
 
-            elif isinstance(parsed, list):
-                raw_signals = parsed
-            else:
-                raw_signals = []
-            signals = _build_signals(raw_signals)
-            logger.info(f"QP built signals: {len(signals)} from {len(raw_signals)} raw")
-            if raw_signals and not signals:
-                # Debug: log why signals were all filtered out
-                for i, rs in enumerate(raw_signals[:3]):
-                    if isinstance(rs, dict):
-                        cat = (rs.get("category") or "").upper()
-                        sig_text = bool((rs.get("signal") or "").strip())
-                        quote = bool((rs.get("quote") or "").strip())
-                        logger.warning(f"QP signal {i} filtered: category='{cat}' valid={cat in CATEGORY_ICONS}, has_signal={sig_text}, has_quote={quote}")
-            for i, sig in enumerate(signals, 1):
-                sig.id = i
+                logger.info(f"Synthesis QP Sub B complete (signals={len(signals)}, orientation, opening moves)")
+                await _emit_partial()
         except Exception as e:
-            logger.error(f"Quick Prep parse error: {e}")
+            logger.error(f"Synthesis QP Sub B error: {e}")
 
-    # ── Emit Quick Prep partial (progressive streaming) ──
-    if on_partial and (signals or executive_orientation):
+    # ── QP Sub C: Pull Quote (fast, skipped in low-signal mode) ──
+    async def _run_sub_c():
+        nonlocal qp_pull_quote
+        if low_signal:
+            return
         try:
-            partial_data = {
-                "person": {
-                    "name": request.target_name,
-                    "title": request.target_title,
-                    "company": request.target_company,
-                    "prior_role": prior_role,
-                    "executive_summary": executive_summary,
-                },
-                "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
-                "recent_moves": recent_moves,
-                "signals": [s.model_dump() for s in signals],
-                "opening_moves": [m.model_dump() for m in opening_moves],
-                "pull_quote": qp_pull_quote,
-                "dossier": None,
-                "warnings": [],
-                "sources_analyzed": {
-                    "podcasts": len(artifacts.podcasts),
-                    "videos": len(artifacts.videos),
-                    "articles": len(artifacts.articles),
-                },
-            }
-            await on_partial("quick_prep", partial_data)
-            logger.info("Emitted Quick Prep partial result")
-            # Give SSE time to flush partial to client before dossier follows
-            await asyncio.sleep(0.5)
+            sys_c = _build_qp_sub_c_system(request)
+            raw = await loop.run_in_executor(
+                None, _call_gemini_sync, sys_c, qp_content, 1024
+            )
+            parsed = _parse_json_safe(raw.strip())
+            if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                parsed = parsed[0]
+            if isinstance(parsed, dict):
+                pq = _validate_pull_quote(parsed.get("pull_quote"), artifacts)
+                if pq:
+                    qp_pull_quote = pq
+                    logger.info("Synthesis QP Sub C complete (pull quote)")
+                    await _emit_partial()
+                else:
+                    logger.info("Synthesis QP Sub C: no valid pull quote found")
         except Exception as e:
-            logger.warning(f"Failed to emit Quick Prep partial: {e}")
+            logger.error(f"Synthesis QP Sub C error: {e}")
+
+    # ── Dossier call (runs in parallel with all QP sub-calls) ──
+    async def _run_dossier():
+        return await loop.run_in_executor(
+            None, _call_gemini_sync, dossier_system, dossier_content
+        )
+
+    # ── Launch all 4 calls in parallel ──
+    dossier_task = asyncio.create_task(_run_dossier())
+    await asyncio.gather(_run_sub_a(), _run_sub_b(), _run_sub_c())
+
+    # Give SSE time to flush QP partials before dossier follows
+    if on_partial and (signals or executive_orientation):
+        await asyncio.sleep(0.3)
 
     # ── Await Full Dossier (may already be done) ──
     try:
@@ -1785,7 +2239,6 @@ async def synthesize(
         dossier.research_confidence = _compute_research_confidence(
             artifacts, has_person_content
         )
-        # Thin signal warning based on signal strength
         if signal_strength == "low":
             dossier.thin_signal_warning = (
                 f"No direct interviews or public executive content found for {request.target_name or 'this person'}. "

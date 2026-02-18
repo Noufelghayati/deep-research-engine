@@ -466,16 +466,21 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
                 if sl:
                     await emit("sources", sources=sl)
 
-                # Run Quick Prep directly — skip signal extraction for speed
-                # (full extraction happens before final synthesis)
+                # Run Quick Prep with on_section callback for progressive streaming
+                # Each parallel sub-call emits as it completes
                 ppc = sum(1 for p in artifacts.podcasts if p.is_person_match)
                 pvc = sum(1 for v in artifacts.videos if v.is_person_match)
                 has_person = pvc > 0 or ppc > 0
 
+                async def _on_section(partial_data):
+                    await emit("partial", section="quick_prep", data=partial_data)
+
                 result = await run_quick_prep_only(
-                    artifacts, request, has_person_content=has_person
+                    artifacts, request, has_person_content=has_person,
+                    on_section=_on_section,
                 )
                 if result:
+                    # Final emission with all sections merged
                     await emit("partial", section="quick_prep", data=result)
                     logger.info(f"Incremental QP emitted ({_qp_src_count} sources)")
             except asyncio.CancelledError:
