@@ -675,59 +675,51 @@ RULES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 2: EXECUTIVE INTELLIGENCE SIGNALS
+PART 2: INTEL (5 cards, ranked by tactical value)
 ═══════════════════════════════════════
 
-You are extracting EXECUTIVE INTELLIGENCE, not company news.
-Each signal must reveal how this executive THINKS, what pressures they're under,
-and where they're vulnerable.
+Generate 5 Intel cards for this person. Each card should:
 
-SIGNAL FORMULA: [Action/Decision] + [Context/Pressure/Stakes] + [What It Reveals]
+1. State the insight in plain language — no "reveals" formula, no category labels
+   in the text. Just say what it means directly.
 
-BAD SIGNAL (just states what happened):
-❌ "Flashfood is scaling from 2,000 to 2,500 stores"
+2. End with one sentence that makes the tactical implication explicit — what does
+   someone walking into a meeting with this person actually DO with this signal?
+   Never leave the insight without a so-what.
 
-GOOD SIGNAL (reveals patterns):
-✅ "Aggressive 25% expansion (2,000→2,500 by EOY) despite 8 months as CEO — high risk/reward growth posture with execution exposure"
+3. Rank the cards by tactical value — the highest leverage signal comes first,
+   the most contextual last. The ordering itself is part of the intelligence.
 
-More examples:
-❌ "Partnered with Kroger" → ✅ "Using Kroger pilot (16 stores) to prove enterprise viability — needs major chain validation to justify scale trajectory"
-❌ "Investing in AI for images" → ✅ "Prioritizing UX quality (AI images) over expansion — signals awareness of quality debt from rapid scaling"
-❌ "Focuses on sustainability" → ✅ "Leads with 'triple bottom line' mission — balancing impact narrative with commercial pressure"
+4. Draw from a DIFFERENT source type for each card where possible — don't pull
+   4 signals from articles and 1 from video. Source diversity signals depth.
 
-SIGNAL CATEGORIES (choose based on what the signal REVEALS):
+NEVER use the word "reveals" more than once across all 5 cards.
 
-🚀 GROWTH — expansion, scaling, market entry, hiring
-💰 MARKET — partnerships, funding, deals, competitive positioning
+Examples:
+✅ "His 2008 Goldman experience left him permanently skeptical of growth narratives — he's been burned by exuberance before and will probe your numbers harder than most. Come with conservative projections you can defend, not optimistic ones you hope he accepts."
+✅ "Displacing Mindbody isn't just a technology switch for her customers, it's a psychological event. She's built her entire sales motion around not repeating the trauma of bad migrations — your implementation story needs to be airtight before she'll consider price."
+✅ "He's launched 50+ brands but his pattern is always '0 to 1' — he gets restless with operational maintenance. If your pitch is about long-term management, reframe it around what it unlocks for the next build."
+
+SIGNAL CATEGORIES (used for icon selection only, NOT shown in text):
+🚀 GROWTH — expansion, scaling, market entry
+💰 MARKET — partnerships, funding, competitive positioning
 🔧 PRODUCT — tech priorities, product strategy, operational focus
-🎯 BACKGROUND — previous roles, philosophy, approach that shapes decisions
-⚖️ TENSION — strategic trade-offs, competing priorities, balance points
-🚨 CHALLENGE — stated problems, pain points, risks, vulnerabilities
+🎯 BACKGROUND — previous roles, philosophy, approach
+⚖️ TENSION — strategic trade-offs, competing priorities
+🚨 CHALLENGE — stated problems, pain points, risks
 
 REQUIRED COMPOSITION (5 signals, each a DIFFERENT category):
-- 1 signal showing growth/expansion approach + pressure it creates
-- 1 signal showing strategic positioning/market action + stakes involved
-- 1 signal showing operational/product priorities + trade-offs
-- 1 signal showing background/philosophy + how it shapes decisions
-- 1 signal showing commercial/market tension + vulnerability
-NEVER repeat the same category. Icons chosen by what signal reveals.
+- Each signal must address a different strategic dimension
+- NEVER repeat the same category
 
 CRITICAL RULES:
-1. Every signal MUST show PRESSURE, RISK, or TRADE-OFF.
-   Not just "they're doing X" but "they're doing X because Y, which means Z"
-2. Be specific with numbers, timelines, stakes.
-3. Show what could go wrong.
-4. Reveal psychology through actions.
-5. Max 25 words per signal. Each signal must be a different dimension.
-6. Each quote must be 15-40 words from source material.
-7. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source.
-8. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts.
-
-WHAT TO LOOK FOR IN SOURCES:
-- Pressure signals: "needs to prove...", "must demonstrate...", timeline pressure
-- Risk signals: new in role, aggressive timelines, unproven at scale
-- Trade-off signals: "over [alternative]", "while maintaining...", priority shifts
-- Psychology signals: how they talk, what they emphasize, their background lens""")
+1. Every signal must end with a tactical so-what for the AE
+2. Be specific with numbers, timelines, stakes
+3. Max 2-3 sentences per signal. Plain prose, no formulas.
+4. Each quote must be 15-40 words from source material
+5. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source
+6. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts
+7. Diversify source types across cards (podcast, video, article)""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -906,7 +898,7 @@ OUTPUT FORMAT (JSON object):
   "signals": [
     {
       "category": "GROWTH",
-      "signal": "Aggressive 25% expansion despite 8 months as CEO — execution exposure",
+      "signal": "She's pushing a 25% store expansion (2,000 to 2,500) just 8 months into her CEO tenure. That's an aggressive bet with serious execution exposure — ask what's breaking at that growth rate and position your solution around the operational strain she's likely feeling right now.",
       "quote": "It's over 2,000 and on any given day probably getting closer to 2,500...",
       "source": {
         "type": "video",
@@ -979,34 +971,25 @@ RULES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 2: EXECUTIVE INTELLIGENCE SIGNALS (LOW SIGNAL MODE)
+PART 2: INTEL (5 cards — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-With limited person-level content, generate signals that:
+With limited person-level content, generate 5 Intel cards that:
 1. LEAD with what we know about the PERSON (even if minimal)
 2. Connect role context to likely operational focus
-3. Use company context to illuminate the person's likely challenges
+3. End each with a tactical so-what for the AE
 4. CLEARLY LABEL what is observed vs inferred
 
-SIGNAL COMPOSITION (5 signals):
-- Signal 1: Identity & role positioning (what we actually know about this person)
-- Signal 2: Likely operational focus based on role + company context (labeled inferred)
-- Signal 3: Market/competitive context THIS PERSON navigates (framed around the person)
-- Signal 4: Role-typical challenges and pressures (labeled inferred)
-- Signal 5: Company momentum that shapes this person's priorities (framed around person)
+Frame EVERY signal around the person, even when using company data.
+Each card: 2-3 sentences max, plain prose. Rank by tactical value.
 
-CRITICAL: Frame EVERY signal around the person, even when using company data.
-  ✓ "As [title], likely navigating [company challenge] — role demands [focus area]"
-  ✗ "[Company] announced [thing]" — this is company news, not person intelligence
-
-SIGNAL CATEGORIES:
+SIGNAL CATEGORIES (for icon selection only):
 🎯 BACKGROUND — identity, role context, career positioning
 🔧 PRODUCT — likely operational/product focus based on role
 💰 MARKET — market context this person operates in
 🚨 CHALLENGE — role-typical pressures and challenges
 ⚖️ TENSION — likely tensions and trade-offs in this role
 
-Each signal: max 25 words.
 For quote field: use a relevant company quote if available, or write:
   "No direct quote available — inferred from role context"
 For inferred signals, set source type to "article" and use the most relevant company source.""")
@@ -1093,7 +1076,7 @@ OUTPUT FORMAT (JSON object):
   "signals": [
     {
       "category": "BACKGROUND",
-      "signal": "[Person]-focused signal text, max 25 words",
+      "signal": "As [Title] at [Company], she joined right as [recent event] was unfolding. That timing suggests she was brought in specifically to manage [challenge] — lead with that context and ask what her first 90 days taught her.",
       "quote": "No direct quote available — inferred from role context",
       "source": {
         "type": "article",
@@ -1312,72 +1295,47 @@ RULES:
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-PART 2: EXECUTIVE INTELLIGENCE SIGNALS (5 signals)
+PART 2: INTEL (5 cards — LOW SIGNAL)
 ═══════════════════════════════════════
 
-With limited person-level content, generate signals that:
-1. LEAD with what we know about the PERSON (even if minimal)
-2. Connect role context to likely operational focus
-3. Use company context to illuminate the person's likely challenges
-4. CLEARLY LABEL what is observed vs inferred
+With limited signal, generate 5 Intel cards. Lead with the person, connect role
+context to likely challenges, end each with tactical so-what for the AE.
+Label inferences clearly. 2-3 sentences max per card, plain prose.
+Rank by tactical value. Diversify source types where possible.
 
-SIGNAL COMPOSITION (5 signals):
-- Signal 1: Identity & role positioning (what we actually know about this person)
-- Signal 2: Likely operational focus based on role + company context (labeled inferred)
-- Signal 3: Market/competitive context THIS PERSON navigates (framed around the person)
-- Signal 4: Role-typical challenges and pressures (labeled inferred)
-- Signal 5: Company momentum that shapes this person's priorities (framed around person)
-
-SIGNAL CATEGORIES:
-🎯 BACKGROUND — identity, role context, career positioning
-🔧 PRODUCT — likely operational/product focus based on role
-💰 MARKET — market context this person operates in
-🚨 CHALLENGE — role-typical pressures and challenges
-⚖️ TENSION — likely tensions and trade-offs in this role
-
-Each signal: max 25 words.
-For quote field: use a relevant company quote if available, or write:
-  "No direct quote available — inferred from role context"
-For inferred signals, set source type to "article" and use the most relevant company source.""")
+SIGNAL CATEGORIES (for icon selection only):
+🎯 BACKGROUND — identity, role context
+🔧 PRODUCT — likely operational focus
+💰 MARKET — market context
+🚨 CHALLENGE — role-typical pressures
+⚖️ TENSION — likely trade-offs""")
     else:
         lines.append("""═══════════════════════════════════════
-PART 2: EXECUTIVE INTELLIGENCE SIGNALS (5 signals)
+PART 2: INTEL (5 cards, ranked by tactical value)
 ═══════════════════════════════════════
 
-You are extracting EXECUTIVE INTELLIGENCE, not company news.
-Each signal must reveal how this executive THINKS, what pressures they're under,
-and where they're vulnerable.
+Generate 5 Intel cards. Each card:
+1. States the insight in plain language — no "reveals" formula
+2. Ends with tactical so-what for the AE
+3. Ranked by tactical value (highest leverage first)
+4. Different source type for each where possible
 
-SIGNAL FORMULA: [Action/Decision] + [Context/Pressure/Stakes] + [What It Reveals]
+NEVER use "reveals" more than once across all 5 cards.
 
-BAD SIGNAL (just states what happened):
-❌ "Flashfood is scaling from 2,000 to 2,500 stores"
+SIGNAL CATEGORIES (for icon selection only):
+🚀 GROWTH — expansion, scaling, market entry
+💰 MARKET — partnerships, funding, competitive positioning
+🔧 PRODUCT — tech priorities, product strategy
+🎯 BACKGROUND — previous roles, philosophy
+⚖️ TENSION — strategic trade-offs
+🚨 CHALLENGE — stated problems, pain points
 
-GOOD SIGNAL (reveals patterns):
-✅ "Aggressive 25% expansion (2,000→2,500 by EOY) despite 8 months as CEO — high risk/reward growth posture with execution exposure"
-
-SIGNAL CATEGORIES (choose based on what the signal REVEALS):
-🚀 GROWTH — expansion, scaling, market entry, hiring
-💰 MARKET — partnerships, funding, deals, competitive positioning
-🔧 PRODUCT — tech priorities, product strategy, operational focus
-🎯 BACKGROUND — previous roles, philosophy, approach that shapes decisions
-⚖️ TENSION — strategic trade-offs, competing priorities, balance points
-🚨 CHALLENGE — stated problems, pain points, risks, vulnerabilities
-
-REQUIRED COMPOSITION (5 signals, each a DIFFERENT category):
-- 1 signal showing growth/expansion approach + pressure it creates
-- 1 signal showing strategic positioning/market action + stakes involved
-- 1 signal showing operational/product priorities + trade-offs
-- 1 signal showing background/philosophy + how it shapes decisions
-- 1 signal showing commercial/market tension + vulnerability
-NEVER repeat the same category.
-
-CRITICAL RULES:
-1. Every signal MUST show PRESSURE, RISK, or TRADE-OFF.
-2. Be specific with numbers, timelines, stakes.
-3. Max 25 words per signal. Each signal must be a different dimension.
-4. Each quote must be 15-40 words from source material.
-5. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source.
+RULES:
+1. Each signal: 2-3 sentences, plain prose, ends with AE tactical implication
+2. Be specific with numbers, timelines, stakes
+3. Each quote: 15-40 words from source material
+4. DEDUPLICATE: same fact from multiple sources = ONE signal
+5. Include source title, URL, date, timestamp for videos/podcasts
 6. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts.""")
 
     # ── PART 3: Opening Moves ──
@@ -1437,7 +1395,7 @@ OUTPUT FORMAT (JSON object):
   "signals": [
     {
       "category": "GROWTH",
-      "signal": "Aggressive 25% expansion despite 8 months as CEO — execution exposure",
+      "signal": "She's pushing a 25% store expansion (2,000 to 2,500) just 8 months into her CEO tenure. That's an aggressive bet with serious execution exposure — ask what's breaking at that growth rate and position your solution around the operational strain she's likely feeling right now.",
       "quote": "It's over 2,000 and on any given day probably getting closer to 2,500...",
       "source": {
         "type": "video",
