@@ -148,30 +148,46 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
                 return True
         return False
 
+    # Build person-matched source lists (only sources where the target is speaking)
+    _pm_podcasts = [p for p in artifacts.podcasts if getattr(p, 'is_person_match', False)]
+    _pm_videos = [v for v in artifacts.videos if getattr(v, 'is_person_match', False)]
+
+    def _quote_in_person_transcript() -> bool:
+        """Check if the quote exists in ANY person-matched transcript."""
+        for p in _pm_podcasts:
+            if _quote_in_transcript(p.transcript_text):
+                return True
+        for v in _pm_videos:
+            if _quote_in_transcript(v.transcript_text):
+                return True
+        return False
+
     def _find_url_from_artifacts() -> str:
-        """Find the source URL using multiple strategies."""
+        """Find the source URL using multiple strategies.
+        Only considers person-matched sources to avoid picking up
+        unrelated videos (e.g. songs by bands with same company name)."""
         import re as _re
         _stop = {'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at',
                  'to', 'for', 'with', 'by', 'from', 'is', 'was', 'are'}
 
-        # Strategy 1: Match quote word-sequences against transcripts
-        for p in artifacts.podcasts:
+        # Strategy 1: Match quote word-sequences against person-matched transcripts
+        for p in _pm_podcasts:
             if _quote_in_transcript(p.transcript_text):
                 logger.info(f"Pull quote URL matched via transcript (podcast): {p.url}")
                 return p.url or ""
-        for v in artifacts.videos:
+        for v in _pm_videos:
             if _quote_in_transcript(v.transcript_text):
                 logger.info(f"Pull quote URL matched via transcript (video): {v.url}")
                 return v.url or ""
 
-        # Strategy 2: Word-overlap between source attribution and artifact titles
+        # Strategy 2: Word-overlap between source attribution and person-matched titles
         if source_str:
             src_words = set(_normalize_words(source_str)) - _stop
             best_url = ""
             best_overlap = 0
-            all_artifacts = [(a, 'podcast') for a in artifacts.podcasts] + \
-                            [(a, 'video') for a in artifacts.videos]
-            for art, kind in all_artifacts:
+            all_pm = [(a, 'podcast') for a in _pm_podcasts] + \
+                     [(a, 'video') for a in _pm_videos]
+            for art, kind in all_pm:
                 title = (art.title or "").lower()
                 title_words = set(_normalize_words(title)) - _stop
                 if len(title_words) < 2:
@@ -184,12 +200,12 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
                 logger.info(f"Pull quote URL matched via title overlap ({best_overlap} words): {best_url}")
                 return best_url
 
-        # Strategy 3: If only one podcast/video has a transcript, must be that source
+        # Strategy 3: If only one person-matched source has a transcript, must be that
         transcript_sources = []
-        for p in artifacts.podcasts:
+        for p in _pm_podcasts:
             if p.transcript_text:
                 transcript_sources.append(p.url or "")
-        for v in artifacts.videos:
+        for v in _pm_videos:
             if v.transcript_text:
                 transcript_sources.append(v.url or "")
         if len(transcript_sources) == 1:
@@ -205,16 +221,20 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
         return None
 
     # Accept if source mentions video/podcast/youtube/interview
+    # BUT verify the quote actually comes from a person-matched source
     accept_keywords = ["youtube", "podcast", "interview", "keynote", "video", "panel", "talk", "conference"]
     if any(kw in source_str for kw in accept_keywords):
+        if not _quote_in_person_transcript():
+            logger.info(f"Pull quote rejected: not found in any person-matched transcript ({quote_text[:50]}...)")
+            return None
         fallback_url = _find_url_from_artifacts() if not source_url else ""
         return _build_result(fallback_url)
 
-    # No clear source — verify quote text exists in a transcript
-    for p in artifacts.podcasts:
+    # No clear source — verify quote text exists in a person-matched transcript
+    for p in _pm_podcasts:
         if _quote_in_transcript(p.transcript_text):
             return _build_result(p.url or "")
-    for v in artifacts.videos:
+    for v in _pm_videos:
         if _quote_in_transcript(v.transcript_text):
             return _build_result(v.url or "")
 

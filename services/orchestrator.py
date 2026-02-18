@@ -91,11 +91,10 @@ async def _step0_podcasts(
             await emit("log", step="step0", message=f"{status} \"{sp.title[:70]}\" = {sp.match_score} [{signals}]")
         await emit("log", step="step0", message=f"Kept {len(kept)} of {len(all_scored)} podcast(s) (threshold \u2265 {settings.disambiguation_threshold})")
 
-    # For each accepted episode: get audio URL + transcribe
+    # Phase 1: Resolve audio URLs (scrape if needed) — fast HTTP calls
+    ready = []
     for podcast in kept:
-        # iTunes results already have audio URLs; Serper results need scraping
         if not podcast.audio_url:
-            # Scrape ListenNotes page for audio URL + metadata
             if emit:
                 await emit("log", step="step0", message=f"Scraping episode page for \"{podcast.title[:50]}\"...")
             scraped = await scrape_episode_page(podcast.url)
@@ -103,10 +102,8 @@ async def _step0_podcasts(
             if not scraped or not scraped.get("audio_url"):
                 if emit:
                     await emit("log", step="step0", message=f"No audio URL found for \"{podcast.title[:50]}\" — skipping")
-                # Don't add to artifacts — useless without audio/transcript
                 continue
 
-            # Update podcast with scraped metadata
             podcast.audio_url = scraped["audio_url"]
             if scraped.get("audio_length_sec"):
                 podcast.audio_length_sec = scraped["audio_length_sec"]
@@ -119,28 +116,28 @@ async def _step0_podcasts(
 
         # Add to artifacts BEFORE transcript fetch so timeout won't lose it
         artifacts.podcasts.append(podcast)
+        ready.append(podcast)
 
-        # Transcribe audio
+    # Phase 2: Transcribe all podcasts in parallel (~47s saved for 2 episodes)
+    async def _transcribe_one(p):
         if emit:
-            await emit("log", step="step0", message=f"Transcribing podcast audio for \"{podcast.title[:50]}\"...")
-
-            async def _on_log_s0(msg):
+            await emit("log", step="step0", message=f"Transcribing podcast audio for \"{p.title[:50]}\"...")
+            async def _on_log(msg):
                 await emit("log", step="step0", message=f"  {msg}")
-
             text, available = await fetch_podcast_transcript(
-                podcast.audio_url, podcast.episode_id, on_log=_on_log_s0,
+                p.audio_url, p.episode_id, on_log=_on_log,
             )
         else:
             text, available = await fetch_podcast_transcript(
-                podcast.audio_url, podcast.episode_id,
+                p.audio_url, p.episode_id,
             )
-
-        podcast.transcript_text = text
-        podcast.transcript_available = available
-
-        # Fire incremental QP after each podcast transcript
+        p.transcript_text = text
+        p.transcript_available = available
         if after_source and available:
             await after_source()
+
+    if ready:
+        await asyncio.gather(*[_transcribe_one(p) for p in ready])
 
     logger.info(f"Step 0 result: {len(artifacts.podcasts)} podcast(s)")
 
@@ -261,10 +258,7 @@ async def _step2_company_leadership(
     queries = [
         f'{company} CEO interview',
         f'{company} founder interview',
-        f'{company} CFO interview',
-        f'{company} CRO interview',
         f'{company} CTO interview',
-        f'{company} COO interview',
         f'{company} leadership panel',
         f'{company} conference talk',
     ]

@@ -375,19 +375,14 @@ async def _web_search(
     allow_linkedin: bool = False,
     time_filter: bool = True,
 ) -> Tuple[List[str], str]:
-    """Search using Serper.dev (primary) -> Brave -> DDG (last fallback).
+    """Search using Serper.dev (primary) -> DDG (fallback).
     Returns (urls, source_engine)."""
     urls = await _search_serper(query, search_log, allow_linkedin=allow_linkedin, time_filter=time_filter)
     if urls:
         return urls, "serper"
 
-    logger.info(f"Serper returned 0 results for '{query[:40]}', trying Brave")
-
-    urls = await _search_brave(query, search_log, allow_linkedin=allow_linkedin)
-    if urls:
-        return urls, "brave"
-
-    logger.info(f"Brave returned 0 results for '{query[:40]}', trying DDG")
+    # Brave skipped — returns 429 consistently
+    logger.info(f"Serper returned 0 results for '{query[:40]}', trying DDG")
 
     urls = await _search_duckduckgo(query, search_log, allow_linkedin=allow_linkedin)
     return urls, "duckduckgo"
