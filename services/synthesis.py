@@ -828,26 +828,32 @@ RULES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 5: OPENING MOVES (3 conversation directions)
+PART 5: CONVERSATION ANGLES (1 primary + 2 alternatives)
 ═══════════════════════════════════════
 
-Generate exactly 3 conversation opening DIRECTIONS (not scripts).
-Each move has an "angle" (2-4 word label) and a "suggestion" (max 25 words).
+Generate one primary Conversation Angle and two alternative angles for this person.
 
-The suggestion is a tactical direction the sales rep adapts to their own voice.
-Format: "[Lead with X] — [ask about / reference Y]."
+The primary angle should be the single highest-leverage conversation starter based
+on cross-source synthesis — something specific enough that the prospect will be
+genuinely surprised the AE knows it.
 
-Examples:
-{"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."}
-{"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like for that partnership."}
-{"angle": "AI Investment", "suggestion": "Lead with the $15M AI/robotics reinvestment — ask about scaling across diverse environments."}
+Each alternative angle should use a DIFFERENT conversational approach — not just a
+different topic. For example:
+- One might be a direct question
+- One might be an observation that invites pushback
+- One might be a vulnerability-based opener that shows the AE did real homework
+
+CRITICAL: Never use the same sentence structure twice across the three angles.
+The formula "Reference X — ask how Y" can be used ONCE maximum.
+
+Each angle should be 1-2 sentences. No internal labels like "Quantitative Creative"
+or "Mental Recovery" — those are internal logic, not what the AE says or thinks.
 
 RULES:
-- Maximum 25 words per suggestion
-- Direction, not a script — tell the rep WHAT to reference and WHAT to ask
-- Format: "[Lead with X] — [ask about / reference Y]"
-- Each angle must target a DIFFERENT dimension
-- Reference specific facts/signals from the research""")
+- 1-2 sentences per angle, natural prose
+- Each angle uses a DIFFERENT conversational mode (curiosity, validation, tension, etc.)
+- Reference specific facts/signals from the research
+- The primary angle must be the single strongest opener""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -880,9 +886,9 @@ OUTPUT FORMAT (JSON object):
     {"event": "Launched AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}
   ],
   "opening_moves": [
-    {"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."},
-    {"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like."},
-    {"angle": "Mission vs. Margin", "suggestion": "Lead with triple bottom line narrative — ask how impact and margin compete."}
+    {"angle": "Primary", "suggestion": "Lead with his 'How I Screwed This Up' series — ask about the most common operational drag he sees in pre-IPO startups today."},
+    {"angle": "Alternative", "suggestion": "Tell him you noticed Rippling just crossed $570M ARR and ask what operational bets he made 18 months ago that actually got them there — let him tell you what he's proud of."},
+    {"angle": "Alternative", "suggestion": "Most vendors come in talking about efficiency. Open instead by acknowledging the tension he's described publicly — that platform teams and application teams want different things — and ask how he thinks about that."}
   ],
   "signals": [
     {
@@ -1034,22 +1040,20 @@ Never fabricate dates or events.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 5: OPENING MOVES (3 conversation directions — LOW SIGNAL MODE)
+PART 5: CONVERSATION ANGLES (1 primary + 2 alternatives — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Generate 3 conversation directions even with limited signal.
-Frame as genuine discovery questions (we don't have deep signal, so ASK).
+Generate one primary and two alternative conversation angles even with limited signal.
+Frame as genuine discovery approaches (we don't have deep signal, so ASK).
 
-Format: "[Lead with X] — [ask about Y]" (max 25 words per suggestion)
-
-Example:
-{"angle": "Role Context", "suggestion": "Lead with their role at [Company] — ask how priorities have evolved since joining."}
+Each angle should use a DIFFERENT conversational approach — not just a different topic.
+Never use the same sentence structure twice. 1-2 sentences per angle.
 
 RULES:
-- Maximum 25 words per suggestion
-- Direction, not a script
+- 1-2 sentences per angle, natural prose
+- Each angle uses a different conversational mode
 - Reference company context the person operates in
-- Each angle targets a different dimension""")
+- The primary angle should be the strongest available opener""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -1071,9 +1075,9 @@ OUTPUT FORMAT (JSON object):
   },
   "recent_moves": [],
   "opening_moves": [
-    {"angle": "Role Context", "suggestion": "Lead with their role at [Company] — ask how priorities have evolved."},
-    {"angle": "Company Momentum", "suggestion": "Reference recent company activity — ask how it shapes their focus."},
-    {"angle": "Market Position", "suggestion": "Lead with competitive landscape — ask about differentiation strategy."}
+    {"angle": "Primary", "suggestion": "Lead with their role at [Company] and a specific company development — ask how it's shaped their priorities since joining."},
+    {"angle": "Alternative", "suggestion": "You could also surface a competitive observation about [Company]'s market and ask how they think about differentiation from their seat."},
+    {"angle": "Alternative", "suggestion": "Given limited public signal, open with genuine curiosity about what drew them to [Company] at this stage — the answer will tell you what they value."}
   ],
   "signals": [
     {
@@ -1377,36 +1381,38 @@ CRITICAL RULES:
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-PART 3: OPENING MOVES (3 conversation directions)
+PART 3: CONVERSATION ANGLES (1 primary + 2 alternatives — LOW SIGNAL)
 ═══════════════════════════════════════
 
-Generate 3 conversation directions even with limited signal.
-Frame as genuine discovery questions (we don't have deep signal, so ASK).
-
-Format: "[Lead with X] — [ask about Y]" (max 25 words per suggestion)
+Generate one primary and two alternative conversation angles with limited signal.
+Frame as genuine discovery approaches. Each angle must use a DIFFERENT conversational
+approach — not just a different topic. Never use the same sentence structure twice.
 
 RULES:
-- Maximum 25 words per suggestion
-- Direction, not a script
-- Reference company context the person operates in
-- Each angle targets a different dimension""")
+- 1-2 sentences per angle, natural prose
+- Each angle uses a different conversational mode
+- Reference company context the person operates in""")
     else:
         lines.append("""═══════════════════════════════════════
-PART 3: OPENING MOVES (3 conversation directions)
+PART 3: CONVERSATION ANGLES (1 primary + 2 alternatives)
 ═══════════════════════════════════════
 
-Generate exactly 3 conversation opening DIRECTIONS (not scripts).
-Each move has an "angle" (2-4 word label) and a "suggestion" (max 25 words).
+Generate one primary Conversation Angle and two alternative angles.
 
-The suggestion is a tactical direction the sales rep adapts to their own voice.
-Format: "[Lead with X] — [ask about / reference Y]."
+The primary angle should be the single highest-leverage conversation starter —
+something specific enough that the prospect will be genuinely surprised the AE knows it.
+
+Each alternative should use a DIFFERENT conversational approach — not just a different
+topic (e.g. curiosity, validation, acknowledged tension).
+
+CRITICAL: Never use the same sentence structure twice. The formula
+"Reference X — ask how Y" can be used ONCE maximum.
 
 RULES:
-- Maximum 25 words per suggestion
-- Direction, not a script — tell the rep WHAT to reference and WHAT to ask
-- Format: "[Lead with X] — [ask about / reference Y]"
-- Each angle must target a DIFFERENT dimension
-- Reference specific facts/signals from the research""")
+- 1-2 sentences per angle, natural prose
+- Each angle uses a different conversational mode
+- Reference specific facts/signals from the research
+- The primary angle must be the single strongest opener""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -1421,9 +1427,9 @@ OUTPUT FORMAT (JSON object):
     "key_pressure": "Execution risk from 25% store growth with unproven infrastructure [VIDEO 1]"
   },
   "opening_moves": [
-    {"angle": "Scaling Pain", "suggestion": "Lead with their 25% store growth — ask how infrastructure is keeping pace."},
-    {"angle": "Enterprise Bet", "suggestion": "Reference the Kroger pilot — ask what success looks like."},
-    {"angle": "Mission vs. Margin", "suggestion": "Lead with triple bottom line narrative — ask how impact and margin compete."}
+    {"angle": "Primary", "suggestion": "Lead with his 'How I Screwed This Up' series — ask about the most common operational drag he sees in pre-IPO startups today."},
+    {"angle": "Alternative", "suggestion": "Tell him you noticed Rippling just crossed $570M ARR and ask what operational bets he made 18 months ago that actually got them there."},
+    {"angle": "Alternative", "suggestion": "Most vendors come in talking about efficiency. Open by acknowledging the tension he's described publicly — that platform teams and application teams want different things."}
   ],
   "signals": [
     {
