@@ -120,44 +120,71 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
             result["source_url"] = url
         return result
 
+    def _normalize_text(text: str) -> str:
+        """Strip punctuation & collapse whitespace for fuzzy matching."""
+        import re
+        return re.sub(r'[^a-z0-9 ]', ' ', text.lower()).strip()
+
+    def _normalize_words(text: str) -> list:
+        """Return list of normalised words."""
+        return _normalize_text(text).split()
+
     def _quote_in_transcript(transcript: str) -> bool:
         """Check if the quote plausibly comes from this transcript.
-        Splits quote on ellipses/punctuation into phrases, checks each phrase."""
+        Uses sliding window of consecutive words — robust against punctuation
+        differences in auto-generated transcripts."""
         if not transcript:
             return False
-        t_lower = transcript.lower()
-        # Split on ellipses and long dashes to get contiguous phrases
-        import re
-        phrases = re.split(r'\.{2,}|\u2026|\u2014|—', quote_text)
-        phrases = [p.strip() for p in phrases if len(p.strip()) > 15]
-        if not phrases:
-            # No long phrases — try raw first 30 chars
-            return quote_text[:30].lower() in t_lower
-        # All substantial phrases must appear in the transcript
-        return all(p.lower() in t_lower for p in phrases)
+        t_norm = _normalize_text(transcript)
+        q_words = _normalize_words(quote_text)
+        if len(q_words) < 4:
+            return ' '.join(q_words) in t_norm
+        # Sliding window: if any 5-consecutive-word sequence from the quote
+        # appears in the transcript, it's a match
+        window = min(5, len(q_words))
+        for i in range(len(q_words) - window + 1):
+            chunk = ' '.join(q_words[i:i + window])
+            if chunk in t_norm:
+                return True
+        return False
 
     def _find_url_from_artifacts() -> str:
         """Find the source URL using multiple strategies."""
-        # Strategy 1: Match quote phrases against transcripts
+        import re as _re
+        _stop = {'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at',
+                 'to', 'for', 'with', 'by', 'from', 'is', 'was', 'are'}
+
+        # Strategy 1: Match quote word-sequences against transcripts
         for p in artifacts.podcasts:
             if _quote_in_transcript(p.transcript_text):
+                logger.info(f"Pull quote URL matched via transcript (podcast): {p.url}")
                 return p.url or ""
         for v in artifacts.videos:
             if _quote_in_transcript(v.transcript_text):
+                logger.info(f"Pull quote URL matched via transcript (video): {v.url}")
                 return v.url or ""
 
-        # Strategy 2: Match source title against artifact titles
+        # Strategy 2: Word-overlap between source attribution and artifact titles
         if source_str:
-            for p in artifacts.podcasts:
-                ptitle = (p.title or "").lower()
-                if ptitle and len(ptitle) > 5 and ptitle[:20] in source_str:
-                    return p.url or ""
-            for v in artifacts.videos:
-                vtitle = (v.title or "").lower()
-                if vtitle and len(vtitle) > 5 and vtitle[:20] in source_str:
-                    return v.url or ""
+            src_words = set(_normalize_words(source_str)) - _stop
+            best_url = ""
+            best_overlap = 0
+            all_artifacts = [(a, 'podcast') for a in artifacts.podcasts] + \
+                            [(a, 'video') for a in artifacts.videos]
+            for art, kind in all_artifacts:
+                title = (art.title or "").lower()
+                title_words = set(_normalize_words(title)) - _stop
+                if len(title_words) < 2:
+                    continue
+                overlap = len(src_words & title_words)
+                if overlap >= 2 and overlap > best_overlap:
+                    best_overlap = overlap
+                    best_url = art.url or ""
+            if best_url:
+                logger.info(f"Pull quote URL matched via title overlap ({best_overlap} words): {best_url}")
+                return best_url
 
-        # Strategy 3: If only one podcast/video has a transcript, it must be from that source
+        # Strategy 3: If only one podcast/video has a transcript, must be that source
         transcript_sources = []
         for p in artifacts.podcasts:
             if p.transcript_text:
@@ -166,6 +193,7 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
             if v.transcript_text:
                 transcript_sources.append(v.url or "")
         if len(transcript_sources) == 1:
+            logger.info(f"Pull quote URL matched via single-source fallback: {transcript_sources[0]}")
             return transcript_sources[0]
 
         return ""
