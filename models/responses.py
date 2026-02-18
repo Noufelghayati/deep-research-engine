@@ -164,9 +164,12 @@ class FullDossier(BaseModel):
 
 
 class RecentMove(BaseModel):
-    """A factual event from the last 90 days with date and source."""
-    event: str = Field(description="Factual event, max 15 words")
-    date: str = Field(description="Month Year, e.g. 'January 2026'")
+    """A factual event from the last 90 days with tier, signal, and hook."""
+    tier: str = Field(default="", description="THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, or NONE")
+    event: str = Field(description="Factual event description")
+    date: str = Field(default="", description="Month Year, e.g. 'January 2026'")
+    signal: str = Field(default="", description="What this tells you about their current priorities")
+    hook: str = Field(default="", description="How an AE can reference this naturally")
     source_url: Optional[str] = None
     source_title: Optional[str] = None
 

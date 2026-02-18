@@ -809,20 +809,34 @@ PART 4: RECENT MOVES (last 90 days, max 4 events)
 TODAY'S DATE: {today.strftime('%B %d, %Y')}
 CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
 
-Identify up to 4 concrete, factual events involving this person or their company
+Identify up to 4 recent activities involving this person or their company
 that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
+For each recent move, do four things:
+1. Label the signal tier:
+   - [THEIR WORDS]: They authored it, appeared in it, or were directly quoted
+   - [THEIR ATTENTION]: They shared, commented on, or engaged with it on LinkedIn
+   - [COMPANY NEWS]: Organizational announcement, funding, press coverage about their company
+   NEVER present a [THEIR ATTENTION] signal as if it were [THEIR WORDS].
+
+2. STATE what happened factually in one line with source and date
+
+3. Add a "signal" line — what does this activity tell you about what's top of mind
+   for this person RIGHT NOW
+
+4. Add a "hook" line — one sentence on how an AE can reference this naturally in
+   the first 5 minutes of a meeting without sounding like they Googled them
+
 Examples:
-{{"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}}
-{{"event": "Launched Progress AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}}
+{{"tier": "THEIR WORDS", "event": "Appeared on podcast discussing quantitative methodology for creative differentiation", "date": "January 2026", "signal": "He's evangelizing a framework he's built — he wants people to understand his methodology.", "hook": "I listened to your conversation with Luke Nelmes — the ecosystem mapping framework was different from how most creative directors talk about differentiation.", "source_url": "https://...", "source_title": "Podcast Title"}}
+{{"tier": "THEIR ATTENTION", "event": "Shared conversation between Rippling CEO and Cursor CEO about scaling and AI infrastructure", "date": "December 2025", "signal": "He's actively thinking about how AI changes the cost of growth — this isn't abstract for him, it's operational.", "hook": "I noticed you shared that conversation between Parker and the Cursor CEO — what made you want to put that in front of your network?", "source_url": "https://...", "source_title": "LinkedIn"}}
 
 RULES:
 - ONLY include events dated AFTER {cutoff.strftime('%B %d, %Y')} — reject anything older
-- If no events from the last 90 days exist in sources, return an EMPTY array []
+- If no events from the last 90 days exist in sources, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
 - Never fabricate dates or events
-- Max 15 words per event description
-- Each event must be factual (funding, product launch, hire, partnership, milestone)
-- Include source URL and title for each event""")
+- Signal and hook must be 1 sentence each
+- Tier must be exactly one of: THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, NONE""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -881,8 +895,8 @@ OUTPUT FORMAT (JSON object):
     ]
   },
   "recent_moves": [
-    {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"},
-    {"event": "Launched AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}
+    {"tier": "THEIR WORDS", "event": "Keynoted Davos 2026 on AI and labor", "date": "January 2026", "signal": "Publicly positioning AI as a labor story.", "hook": "Your Davos talk reframed how I think about workforce planning.", "source_url": "https://...", "source_title": "Davos 2026"},
+    {"tier": "COMPANY NEWS", "event": "Unveiled new self-driving car models", "date": "January 2026", "signal": "Betting on automotive AI beyond data centers.", "hook": "The autonomous vehicle push is a big new surface area.", "source_url": "https://...", "source_title": "NVIDIA Live"}
   ],
   "opening_moves": [
     {"angle": "Primary", "suggestion": "Lead with his 'How I Screwed This Up' series — ask about the most common operational drag he sees in pre-IPO startups today."},
@@ -1029,8 +1043,10 @@ PART 4: RECENT MOVES (last 90 days — LOW SIGNAL MODE)
 TODAY'S DATE: {today_ls.strftime('%B %d, %Y')}
 CUTOFF: {cutoff_ls.strftime('%B %d, %Y')}
 
-Same rules as standard mode. Up to 4 factual events AFTER {cutoff_ls.strftime('%B %d, %Y')}.
-If no dated events exist within this window, return an EMPTY array [].
+Same rules as standard mode. Up to 4 events AFTER {cutoff_ls.strftime('%B %d, %Y')}.
+Each move must include: tier (THEIR WORDS / THEIR ATTENTION / COMPANY NEWS), event, date,
+signal (what's top of mind), hook (how AE references it naturally).
+If no events exist, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
 Never fabricate dates or events.""")
 
     lines.append("")
@@ -1177,16 +1193,18 @@ TASK 2: RECENT MOVES (last 90 days, max 4 events)
 TODAY'S DATE: {today.strftime('%B %d, %Y')}
 CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
 
-Identify up to 4 concrete, factual events involving this person or their company
-that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
+Identify up to 4 recent activities BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
-RULES:
-- ONLY include events dated AFTER {cutoff.strftime('%B %d, %Y')} — reject anything older
-- If no events from the last 90 days exist in sources, return an EMPTY array []
-- Never fabricate dates or events
-- Max 15 words per event description
-- Each event must be factual (funding, product launch, hire, partnership, milestone)
-- Include source URL and title for each event""")
+For each, include:
+- tier: THEIR WORDS / THEIR ATTENTION / COMPANY NEWS
+- event: what happened (1 line)
+- date: Month Year
+- signal: what this tells you about what's top of mind (1 sentence)
+- hook: how an AE references this naturally (1 sentence)
+- source_url and source_title
+
+If no events, return: [{{"tier": "NONE", "event": "No recent public activity found", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
+Never fabricate dates or events.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -1204,7 +1222,7 @@ OUTPUT FORMAT (JSON object):
   "prior_role": "CMO, Impossible Foods",
   "executive_summary": "2-3 sentence Executive Snapshot",
   "recent_moves": [
-    {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}
+    {"tier": "THEIR WORDS", "event": "Keynoted Davos 2026 on AI and labor", "date": "January 2026", "signal": "Publicly positioning AI as a labor transformation story.", "hook": "Your Davos talk reframed how I think about workforce planning.", "source_url": "https://...", "source_title": "Davos 2026"}
   ]
 }
 
@@ -2092,13 +2110,30 @@ async def run_quick_prep_only(
                 rm_raw = parsed.get("recent_moves") or []
                 recent_moves = []
                 for rm in rm_raw[:4]:
-                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                    if isinstance(rm, dict) and rm.get("event"):
+                        tier = rm.get("tier") or ""
+                        if tier == "NONE":
+                            recent_moves.append({
+                                "tier": "NONE",
+                                "event": rm["event"],
+                                "date": "",
+                                "signal": "",
+                                "hook": "",
+                                "source_url": "",
+                                "source_title": "",
+                            })
+                            continue
+                        if not rm.get("date"):
+                            continue
                         if not _is_within_90_days(rm["date"]):
                             logger.info(f"Recent move filtered (too old): {rm['date']} — {rm['event'][:50]}")
                             continue
                         recent_moves.append({
+                            "tier": tier,
                             "event": rm["event"],
                             "date": rm["date"],
+                            "signal": rm.get("signal") or "",
+                            "hook": rm.get("hook") or "",
                             "source_url": rm.get("source_url") or "",
                             "source_title": rm.get("source_title") or "",
                         })
@@ -2300,13 +2335,30 @@ async def synthesize(
                 rm_raw = parsed.get("recent_moves") or []
                 rm_list = []
                 for rm in rm_raw[:4]:
-                    if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                    if isinstance(rm, dict) and rm.get("event"):
+                        tier = rm.get("tier") or ""
+                        if tier == "NONE":
+                            rm_list.append({
+                                "tier": "NONE",
+                                "event": rm["event"],
+                                "date": "",
+                                "signal": "",
+                                "hook": "",
+                                "source_url": "",
+                                "source_title": "",
+                            })
+                            continue
+                        if not rm.get("date"):
+                            continue
                         if not _is_within_90_days(rm["date"]):
                             logger.info(f"Recent move filtered (too old): {rm['date']} — {rm['event'][:50]}")
                             continue
                         rm_list.append({
+                            "tier": tier,
                             "event": rm["event"],
                             "date": rm["date"],
+                            "signal": rm.get("signal") or "",
+                            "hook": rm.get("hook") or "",
                             "source_url": rm.get("source_url") or "",
                             "source_title": rm.get("source_title") or "",
                         })
@@ -2480,8 +2532,11 @@ async def synthesize(
         executive_orientation=executive_orientation,
         recent_moves=[
             RecentMove(
+                tier=rm.get("tier", ""),
                 event=rm["event"],
-                date=rm["date"],
+                date=rm.get("date", ""),
+                signal=rm.get("signal", ""),
+                hook=rm.get("hook", ""),
                 source_url=rm.get("source_url"),
                 source_title=rm.get("source_title"),
             ) for rm in recent_moves
