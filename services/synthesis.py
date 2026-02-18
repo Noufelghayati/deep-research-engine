@@ -66,11 +66,33 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
     if isinstance(pq_raw, dict) and pq_raw.get("quote"):
         quote_text = pq_raw["quote"]
         source_str = (pq_raw.get("source") or "").lower()
+        source_url = pq_raw.get("source_url") or ""
     elif isinstance(pq_raw, str) and pq_raw:
         quote_text = pq_raw
         source_str = ""
+        source_url = ""
     else:
         return None
+
+    source_display = pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""
+
+    def _build_result(matched_url: str = "") -> dict:
+        """Build pull quote result, using matched_url as fallback if Gemini didn't provide one."""
+        url = source_url or matched_url
+        result = {"quote": quote_text, "source": source_display}
+        if url:
+            result["source_url"] = url
+        return result
+
+    def _find_url_from_artifacts() -> str:
+        """Try to find the source URL by matching quote text against transcripts."""
+        for p in artifacts.podcasts:
+            if p.transcript_text and quote_text[:40].lower() in p.transcript_text.lower():
+                return p.url or ""
+        for v in artifacts.videos:
+            if v.transcript_text and quote_text[:40].lower() in v.transcript_text.lower():
+                return v.url or ""
+        return ""
 
     # Reject if source attribution mentions LinkedIn or article
     reject_keywords = ["linkedin", "article", "blog", "post"]
@@ -81,15 +103,16 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
     # Accept if source mentions video/podcast/youtube/interview
     accept_keywords = ["youtube", "podcast", "interview", "keynote", "video", "panel", "talk", "conference"]
     if any(kw in source_str for kw in accept_keywords):
-        return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+        fallback_url = _find_url_from_artifacts() if not source_url else ""
+        return _build_result(fallback_url)
 
     # No clear source — verify quote text exists in a transcript
     for p in artifacts.podcasts:
         if p.transcript_text and quote_text[:40].lower() in p.transcript_text.lower():
-            return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+            return _build_result(p.url or "")
     for v in artifacts.videos:
         if v.transcript_text and quote_text[:40].lower() in v.transcript_text.lower():
-            return {"quote": quote_text, "source": pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""}
+            return _build_result(v.url or "")
 
     logger.info(f"Pull quote rejected: not found in any transcript ({quote_text[:60]}...)")
     return None
@@ -678,7 +701,8 @@ OUTPUT FORMAT (JSON object):
   "executive_summary": "Single-sentence snapshot, max 25 words",
   "pull_quote": {
     "quote": "It's to me truly unacceptable that we continue to waste food at this scale...",
-    "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45"
+    "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45",
+    "source_url": "https://youtube.com/watch?v=abgKopCIDOY"
   },
   "executive_orientation": {
     "bullets": [
@@ -1261,13 +1285,14 @@ RULES:
 - Choose a quote that reveals their thinking, philosophy, values, or pressure
 - Pick quotes where the person speaks with conviction or candor — not generic platitudes
 - Include the source as: "Source Title - Platform - Date - Timestamp"
+- ALWAYS include source_url: the exact URL of the source video/podcast from the SOURCE MATERIAL
 - If no podcast/video transcripts are available, return null
 
 ═══════════════════════════════════════
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
-  "pull_quote": {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS"}
+  "pull_quote": {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS", "source_url": "https://youtube.com/watch?v=... or podcast URL"}
 }
 
 If no direct quotes available, return:
