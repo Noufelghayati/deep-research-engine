@@ -671,7 +671,15 @@ RULES:
 - Each dimension: 2 sentences max, AE implication first, evidence second
 - No category labels or headers on dimensions
 - No two dimensions may address the same strategic area
-- NEVER fabricate or speculate without evidence""")
+- NEVER fabricate or speculate without evidence
+REJECTION FRAME: At least one of the five dimensions MUST be a rejection frame —
+what this person is likely to reject, dismiss, or have zero patience for.
+This dimension must:
+- Be written as a direct statement: "He'll reject…" / "She has no patience for…"
+- Cite a specific quote, decision, or pattern
+- Avoid generic language. Never hedge.
+- Be the sharpest, most direct line in the section.
+If no rejection pattern is clearly supported by evidence, do not fabricate one.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -842,7 +850,26 @@ RULES:
 - Tier must be exactly one of: THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, NONE""")
 
     lines.append("")
-    lines.append("""═══════════════════════════════════════
+    lines.append("""
+═══════════════════════════════════════
+CORE READ (thesis statement)
+═══════════════════════════════════════
+
+Generate one Core Read statement for this person.
+This appears between Recent Moves and Lead Orientation and serves as the thesis.
+
+It must:
+1. Begin with: "Across interviews, public statements, and company actions, a consistent pattern emerges:"
+2. Identify a specific, evidence-backed tension, strategic posture, or recurring
+   decision pattern visible in at least two distinct source types.
+3. Focus on behavior and strategic posture — not personality speculation.
+4. Avoid psychological interpretation unless directly supported by quotes or actions.
+5. Be one to two sentences maximum.
+
+If no genuine cross-source pattern exists, write:
+"Sources present a consistent but narrow view — signals below are directional rather than cross-validated."
+
+═══════════════════════════════════════
 PART 5: CONVERSATION ANGLES (1 primary + 2 alternatives)
 ═══════════════════════════════════════
 
@@ -887,6 +914,7 @@ OUTPUT FORMAT (JSON object):
     "source_url": "https://youtube.com/watch?v=abgKopCIDOY",
     "why_it_matters": "She leads with mission, not margin — if you pitch cost savings first, you'll lose her. Frame your value in terms of waste reduction impact and she'll lean in."
   },
+  "core_read": "Across interviews, public statements, and company actions, a consistent pattern emerges: he treats every strategic decision as an infrastructure bet — the through-line is building irreversible platform lock-in while appearing to give everything away.",
   "executive_orientation": {
     "key_pressure": "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk.",
     "bullets": [
@@ -922,7 +950,7 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_summary", "pull_quote", "executive_orientation", "recent_moves", "opening_moves", and "signals".
+Return a JSON object with "prior_role", "executive_summary", "pull_quote", "core_read", "executive_orientation", "recent_moves", "opening_moves", and "signals".
 If no quality signals found, return {"prior_role": null, "executive_summary": "...", "pull_quote": null, "executive_orientation": {"bullets": [], "key_pressure": ""}, "recent_moves": [], "opening_moves": [], "signals": []}.""")
 
     return "\n".join(lines)
@@ -978,7 +1006,10 @@ RULES:
 - Key Pressure: 2 sentences max, role-inferred if no direct evidence
 - Each dimension: 2 sentences max, AE implication first
 - Acknowledge limited signal where appropriate
-- NEVER fabricate or speculate without evidence""")
+- NEVER fabricate or speculate without evidence
+REJECTION FRAME: If evidence supports it, one dimension should describe what this
+person is likely to reject or dismiss. Written as "He'll reject…" / "She has no
+patience for…" — cite specific evidence. Do not fabricate if unsupported.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
@@ -1050,7 +1081,18 @@ If no events exist, return: [{{"tier": "NONE", "event": "No recent public activi
 Never fabricate dates or events.""")
 
     lines.append("")
-    lines.append("""═══════════════════════════════════════
+    lines.append("""
+═══════════════════════════════════════
+CORE READ (thesis statement — LOW SIGNAL)
+═══════════════════════════════════════
+
+Generate one Core Read statement based on available signal.
+With limited sources, default to:
+"Sources present a consistent but narrow view — signals below are directional rather than cross-validated."
+
+Only write a pattern-based thesis if you genuinely see evidence from 2+ source types.
+
+═══════════════════════════════════════
 PART 5: CONVERSATION ANGLES (1 primary + 2 alternatives — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
@@ -1076,6 +1118,7 @@ OUTPUT FORMAT (JSON object):
   // Must be the role directly before their current one — never a role from 2+ positions ago.
   "executive_summary": "2-3 sentence Executive Snapshot acknowledging limited signal",
   "pull_quote": null,
+  "core_read": "Sources present a consistent but narrow view — signals below are directional rather than cross-validated.",
   "executive_orientation": {
     "key_pressure": "Limited direct signal — based on role context, the most likely structural tension is [specific role-typical pressure]. Any vendor approaching should [implication].",
     "bullets": [
@@ -1106,7 +1149,7 @@ OUTPUT FORMAT (JSON object):
   ]
 }
 
-Return a JSON object with "prior_role", "executive_summary", "pull_quote", "executive_orientation", "recent_moves", "opening_moves", and "signals".
+Return a JSON object with "prior_role", "executive_summary", "pull_quote", "core_read", "executive_orientation", "recent_moves", "opening_moves", and "signals".
 EVERY signal must be framed around the person, never the company alone.""")
 
     return "\n".join(lines)
@@ -1274,6 +1317,31 @@ def _build_qp_sub_b_system(
         lines.append(f"Focus on what someone in the role of {request.target_title or 'executive'}")
         lines.append("at this company would be navigating. Label role-inferred insights as such.")
 
+    # ── CORE READ ──
+    lines.append("")
+    if low_signal:
+        lines.append("""═══════════════════════════════════════
+CORE READ (thesis statement — LOW SIGNAL)
+═══════════════════════════════════════
+
+Generate one Core Read statement. With limited sources, default to:
+"Sources present a consistent but narrow view — signals below are directional rather than cross-validated."
+Only write a pattern-based thesis if you see evidence from 2+ source types.""")
+    else:
+        lines.append("""═══════════════════════════════════════
+CORE READ (thesis statement)
+═══════════════════════════════════════
+
+Generate one Core Read statement for this person.
+It must begin with: "Across interviews, public statements, and company actions, a consistent pattern emerges:"
+Identify a specific tension, strategic posture, or recurring decision pattern
+visible in at least 2 distinct source types. Focus on behavior, not personality.
+1-2 sentences max.
+
+If no genuine cross-source pattern exists, write:
+"Sources present a consistent but narrow view — signals below are directional rather than cross-validated."
+""")
+
     # ── PART 1: Orientation ──
     lines.append("")
     if low_signal:
@@ -1285,7 +1353,11 @@ FIRST, write the Key Pressure — most likely structural tension based on role c
 2 sentences max. Acknowledge limited signal.
 
 THEN, write up to 5 orientation dimensions. Each: AE implication first, evidence second,
-2 sentences max, no labels/headers. Acknowledge limited signal where appropriate.""")
+2 sentences max, no labels/headers. Acknowledge limited signal where appropriate.
+
+REJECTION FRAME: If evidence supports it, one dimension should describe what this
+person is likely to reject or dismiss. Written as "He'll reject…" / "She has no
+patience for…" — cite specific evidence. Do not fabricate if unsupported.""")
     else:
         lines.append("""═══════════════════════════════════════
 PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions)
@@ -1306,7 +1378,16 @@ RULES:
 - Key Pressure: 2 sentences max, specific, leads the section
 - Each dimension: 2 sentences max, AE implication first
 - No category labels or headers
-- NEVER fabricate or speculate without evidence""")
+- NEVER fabricate or speculate without evidence
+
+REJECTION FRAME: At least one of the five dimensions MUST be a rejection frame —
+what this person is likely to reject, dismiss, or have zero patience for.
+This dimension must:
+- Be written as a direct statement: "He'll reject…" / "She has no patience for…"
+- Cite a specific quote, decision, or pattern
+- Avoid generic language. Never hedge.
+- Be the sharpest, most direct line in the section.
+If no rejection pattern is clearly supported by evidence, do not fabricate one.""")
 
     # ── PART 2: Signals ──
     lines.append("")
@@ -1403,6 +1484,7 @@ RULES:
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
+  "core_read": "Across interviews, public statements, and company actions, a consistent pattern emerges: [specific cross-source pattern].",
   "executive_orientation": {
     "key_pressure": "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk.",
     "bullets": [
@@ -2061,6 +2143,7 @@ async def run_quick_prep_only(
             "executive_summary": None,
         },
         "executive_orientation": None,
+        "core_read": "",
         "recent_moves": [],
         "signals": [],
         "opening_moves": [],
@@ -2154,6 +2237,11 @@ async def run_quick_prep_only(
                         key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
                     )
                     merged["executive_orientation"] = eo.model_dump()
+
+                # Core Read
+                cr_raw = parsed.get("core_read")
+                if isinstance(cr_raw, str) and cr_raw.strip():
+                    merged["core_read"] = cr_raw.strip()
 
                 # Signals
                 raw_signals = parsed.get("signals") or []
@@ -2262,6 +2350,7 @@ async def synthesize(
     prior_role = None
     signals = []
     executive_orientation = None
+    core_read = ""
     executive_summary = None
     opening_moves = []
     qp_pull_quote = None
@@ -2283,6 +2372,7 @@ async def synthesize(
                 "executive_summary": executive_summary,
             },
             "executive_orientation": executive_orientation.model_dump() if executive_orientation else None,
+            "core_read": core_read,
             "recent_moves": recent_moves,
             "signals": [s.model_dump() for s in signals],
             "opening_moves": [m.model_dump() for m in opening_moves],
@@ -2351,7 +2441,7 @@ async def synthesize(
 
     # ── QP Sub B: Signals + Orientation + Opening Moves (heavy) ──
     async def _run_sub_b():
-        nonlocal signals, executive_orientation, opening_moves
+        nonlocal signals, executive_orientation, opening_moves, core_read
         try:
             raw = await loop.run_in_executor(
                 None, _call_gemini_sync, sys_b, qp_content, 4096
@@ -2378,6 +2468,11 @@ async def synthesize(
                         bullets=[b for b in raw_bullets if isinstance(b, str)][:5],
                         key_pressure=eo_raw.get("key_pressure") or eo_raw.get("vulnerable") or "",
                     )
+
+                # Core Read
+                cr_raw = parsed.get("core_read")
+                if isinstance(cr_raw, str) and cr_raw.strip():
+                    core_read = cr_raw.strip()
 
                 # Signals
                 raw_signals = parsed.get("signals") or []
@@ -2511,6 +2606,7 @@ async def synthesize(
             executive_summary=executive_summary,
         ),
         executive_orientation=executive_orientation,
+        core_read=core_read,
         recent_moves=[
             RecentMove(
                 tier=rm.get("tier", ""),

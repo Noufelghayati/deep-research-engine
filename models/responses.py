@@ -183,6 +183,7 @@ class OpeningMove(BaseModel):
 class ResearchResponse(BaseModel):
     person: PersonInfo
     executive_orientation: Optional[ExecutiveOrientation] = None
+    core_read: str = Field(default='', description='Cross-source thesis statement')
     recent_moves: List[RecentMove] = Field(
         default_factory=list,
         description="Up to 4 factual events from the last 90 days",
