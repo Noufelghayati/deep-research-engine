@@ -697,6 +697,18 @@ Generate 5 Intel cards for this person. Each card should:
 
 3. Rank the cards by tactical value — the highest leverage signal comes first,
    the most contextual last. The ordering itself is part of the intelligence.
+CARD 1 ANCHOR RULE: Card 1 must be the strongest available tactical signal.
+It must be one of:
+- A direct quote-based signal that shows how this person thinks, or
+- A behavior-backed signal (decision, repeated action, measurable pattern), or
+- A cross-source synthesis signal (if distinct from the Core Read thesis)
+
+Card 1 must:
+- Add new leverage beyond the Executive Snapshot and Core Read
+- Be immediately usable in a live conversation
+- NEVER be company news, funding announcements, headcount data, or LinkedIn bio restatements
+- NEVER apologize or state that signal depth is weak
+If no cross-source synthesis exists, default to the strongest quote-backed or behavior-backed signal.
 
 4. HARD RULE: No more than 2 cards from the same source type (video/article/podcast).
    If 3+ sources are the same type, skip the weakest and find signal from a different type.
@@ -1029,6 +1041,11 @@ WORD LIMIT: Max 40 words per card. Plain prose, no filler.
 HARD RULE: No more than 2 cards from the same source type.
 TACTICAL PRECISION: Each so-what must be specific to THIS person —
 generic advice like "position your solution" fails the test.
+
+CARD 1 ANCHOR RULE: Card 1 must be the strongest signal available, even with limited data.
+Prefer a direct quote or observable behavior over role-inferred context.
+Card 1 must add leverage beyond the Executive Snapshot — never restate the bio.
+NEVER apologize or state that signal depth is weak.
 Rank by tactical value.
 
 SIGNAL CATEGORIES (for icon selection only):
@@ -1402,6 +1419,10 @@ likely challenges, end each with a person-specific tactical so-what.
 Label inferences clearly. Max 40 words per card, plain prose.
 Rank by tactical value. HARD RULE: No more than 2 cards from the same source type.
 Generic so-whats like "position your solution" fail — be specific to this person.
+CARD 1 ANCHOR RULE: Card 1 must be the strongest signal available, even with limited data.
+Prefer a direct quote or observable behavior over role-inferred context.
+Card 1 must add leverage beyond the Executive Snapshot — never restate the bio.
+NEVER apologize or state that signal depth is weak.
 
 SIGNAL CATEGORIES (for icon selection only):
 🎯 BACKGROUND — identity, role context
@@ -1425,6 +1446,18 @@ NEVER use "reveals" more than once across all 5 cards.
 Start every card with He/She, never the company name. Max 40 words per card.
 Generic so-whats like "position your offerings" fail — make it specific to
 this person's psychology and situation.
+CARD 1 ANCHOR RULE: Card 1 must be the strongest available tactical signal.
+It must be one of:
+- A direct quote-based signal that shows how this person thinks, or
+- A behavior-backed signal (decision, repeated action, measurable pattern), or
+- A cross-source synthesis signal (if distinct from the Core Read thesis)
+
+Card 1 must:
+- Add new leverage beyond the Executive Snapshot and Core Read
+- Be immediately usable in a live conversation
+- NEVER be company news, funding announcements, headcount data, or LinkedIn bio restatements
+- NEVER apologize or state that signal depth is weak
+If no cross-source synthesis exists, default to the strongest quote-backed or behavior-backed signal.
 
 SIGNAL CATEGORIES (for icon selection only):
 🚀 GROWTH — expansion, scaling, market entry
