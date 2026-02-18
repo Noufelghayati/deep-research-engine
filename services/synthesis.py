@@ -85,13 +85,42 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
         return result
 
     def _find_url_from_artifacts() -> str:
-        """Try to find the source URL by matching quote text against transcripts."""
+        """Find the source URL using multiple strategies (quote text, title, single source)."""
+        # Strategy 1: Match quote text against transcripts (clean ellipses first)
+        clean_quote = quote_text.replace("...", " ").replace("\u2026", " ")
+        # Use multiple short fragments for matching (handles ellipses in quotes)
+        fragments = [w for w in clean_quote.split() if len(w) > 3][:8]
+        search_str = " ".join(fragments[:5]).lower() if fragments else ""
+
         for p in artifacts.podcasts:
-            if p.transcript_text and quote_text[:40].lower() in p.transcript_text.lower():
+            if p.transcript_text and search_str and search_str in p.transcript_text.lower():
                 return p.url or ""
         for v in artifacts.videos:
-            if v.transcript_text and quote_text[:40].lower() in v.transcript_text.lower():
+            if v.transcript_text and search_str and search_str in v.transcript_text.lower():
                 return v.url or ""
+
+        # Strategy 2: Match source title against artifact titles
+        if source_str:
+            for p in artifacts.podcasts:
+                ptitle = (p.title or "").lower()
+                if ptitle and len(ptitle) > 5 and ptitle[:20] in source_str:
+                    return p.url or ""
+            for v in artifacts.videos:
+                vtitle = (v.title or "").lower()
+                if vtitle and len(vtitle) > 5 and vtitle[:20] in source_str:
+                    return v.url or ""
+
+        # Strategy 3: If only one podcast/video has a transcript, it must be from that source
+        transcript_sources = []
+        for p in artifacts.podcasts:
+            if p.transcript_text:
+                transcript_sources.append(p.url or "")
+        for v in artifacts.videos:
+            if v.transcript_text:
+                transcript_sources.append(v.url or "")
+        if len(transcript_sources) == 1:
+            return transcript_sources[0]
+
         return ""
 
     # Reject if source attribution mentions LinkedIn or article
@@ -107,11 +136,15 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
         return _build_result(fallback_url)
 
     # No clear source — verify quote text exists in a transcript
+    clean_quote = quote_text.replace("...", " ").replace("\u2026", " ")
+    fragments = [w for w in clean_quote.split() if len(w) > 3][:8]
+    search_str = " ".join(fragments[:5]).lower() if fragments else ""
+
     for p in artifacts.podcasts:
-        if p.transcript_text and quote_text[:40].lower() in p.transcript_text.lower():
+        if p.transcript_text and search_str and search_str in p.transcript_text.lower():
             return _build_result(p.url or "")
     for v in artifacts.videos:
-        if v.transcript_text and quote_text[:40].lower() in v.transcript_text.lower():
+        if v.transcript_text and search_str and search_str in v.transcript_text.lower():
             return _build_result(v.url or "")
 
     logger.info(f"Pull quote rejected: not found in any transcript ({quote_text[:60]}...)")
