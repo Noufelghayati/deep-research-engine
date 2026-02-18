@@ -112,12 +112,16 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
 
     source_display = pq_raw.get("source") or "" if isinstance(pq_raw, dict) else ""
 
+    why_it_matters = pq_raw.get("why_it_matters") or "" if isinstance(pq_raw, dict) else ""
+
     def _build_result(matched_url: str = "") -> dict:
         """Build pull quote result, using matched_url as fallback if Gemini didn't provide one."""
         url = source_url or matched_url
         result = {"quote": quote_text, "source": source_display}
         if url:
             result["source_url"] = url
+        if why_it_matters:
+            result["why_it_matters"] = why_it_matters
         return result
 
     def _normalize_text(text: str) -> str:
@@ -729,11 +733,17 @@ WHAT TO LOOK FOR IN SOURCES:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 2.5: PULL QUOTE (1 standout direct quote)
+PART 2.5: PULL QUOTE (1 standout direct quote + tactical context)
 ═══════════════════════════════════════
 
-Select the single most revealing, powerful direct quote from the executive.
-This is the "wow" moment — displayed prominently at the top of the report.
+Select the quote that reveals the most about how this person thinks, what they
+value, or what they're reacting against — not the most impressive-sounding one.
+Recency matters but insight matters more.
+
+Then add a "why_it_matters" line — 1-2 sentences that translate the quote into a
+tactical implication for the AE. This should complete the thought: "This tells you
+that in your meeting, you should..." Always write from the AE's perspective —
+what do they DO with this information.
 
 RULES:
 - Must be VERBATIM from a video transcript or podcast transcript (15-40 words)
@@ -741,10 +751,19 @@ RULES:
 - NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
 - Choose a quote that reveals their thinking, philosophy, values, or pressure
 - Pick quotes where the person speaks with conviction or candor — not generic platitudes
+- NEVER select quotes containing generic business language like "customer-obsessed,"
+  "results-driven," or "move the needle" unless surrounding context makes them
+  tactically useful. If the only available quotes are generic, return null.
 - Include the source as: "Source Title - Platform - Date - Timestamp"
 - If no podcast/video transcripts are available, return null
+- why_it_matters must be 1-2 sentences max, always from the AE's perspective
 
-Output: {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS"}
+Examples of good why_it_matters:
+✓ "He doesn't want a vendor pitch — he wants to know how you become part of his operational infrastructure. Lead with integration and workflow impact, not features."
+✓ "He'll respect you if you know your craft and can articulate why you made the choices you made. Don't oversell — he'll see through it immediately."
+✓ "She's been the person who has to make tools actually work for reps. She'll be evaluating whether you've thought through adoption, not just capability."
+
+Output: {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS", "why_it_matters": "1-2 sentence tactical implication for the AE"}
 or null if no direct quotes available.""")
 
     lines.append("")
@@ -844,7 +863,8 @@ OUTPUT FORMAT (JSON object):
   "pull_quote": {
     "quote": "It's to me truly unacceptable that we continue to waste food at this scale...",
     "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45",
-    "source_url": "https://youtube.com/watch?v=abgKopCIDOY"
+    "source_url": "https://youtube.com/watch?v=abgKopCIDOY",
+    "why_it_matters": "She leads with mission, not margin — if you pitch cost savings first, you'll lose her. Frame your value in terms of waste reduction impact and she'll lean in."
   },
   "executive_orientation": {
     "bullets": [
@@ -1432,11 +1452,16 @@ def _build_qp_sub_c_system(request: ResearchRequest) -> str:
         _qp_target_block(request),
         "",
         """═══════════════════════════════════════
-TASK: Select the SINGLE most revealing direct quote from the executive
+TASK: Select the SINGLE most revealing direct quote + tactical context
 ═══════════════════════════════════════
 
-Select the single most revealing, powerful direct quote from the executive.
-This is the "wow" moment — displayed prominently at the top of the report.
+Select the quote that reveals the most about how this person thinks, what they
+value, or what they're reacting against — not the most impressive-sounding one.
+Recency matters but insight matters more.
+
+Then add a "why_it_matters" line — 1-2 sentences that translate the quote into a
+tactical implication for the AE. Always write from the AE's perspective —
+what do they DO with this information.
 
 RULES:
 - Must be VERBATIM from a video transcript or podcast transcript (15-40 words)
@@ -1444,15 +1469,19 @@ RULES:
 - NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
 - Choose a quote that reveals their thinking, philosophy, values, or pressure
 - Pick quotes where the person speaks with conviction or candor — not generic platitudes
+- NEVER select quotes containing generic business language like "customer-obsessed,"
+  "results-driven," or "move the needle" unless surrounding context makes them useful.
+  If the only available quotes are generic, return null.
 - Include the source as: "Source Title - Platform - Date - Timestamp"
 - ALWAYS include source_url: the exact URL of the source video/podcast from the SOURCE MATERIAL
 - If no podcast/video transcripts are available, return null
+- why_it_matters: 1-2 sentences max, always from the AE's perspective
 
 ═══════════════════════════════════════
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
-  "pull_quote": {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS", "source_url": "https://youtube.com/watch?v=... or podcast URL"}
+  "pull_quote": {"quote": "verbatim text...", "source": "Source Title - Platform - Date - MM:SS", "source_url": "https://youtube.com/watch?v=...", "why_it_matters": "1-2 sentence tactical implication for the AE"}
 }
 
 If no direct quotes available, return:
@@ -1533,7 +1562,7 @@ Your output must contain ONLY information from the SOURCE MATERIAL provided abov
 
 --- FORMAT EXAMPLE (structure only, do NOT copy content) ---
 {
-  "pull_quote": "<verbatim quote from transcript>",
+  "pull_quote": {"quote": "<verbatim quote from transcript>", "source": "Source - Platform - Date - MM:SS", "source_url": "https://...", "why_it_matters": "1-2 sentence tactical implication for the AE"},
   "background": [
     "<role> at <company> (<date>, promoted from <prior role>) [SOURCE N]",
     "Previously: <prior role> at <prior company> (<years>) [SOURCE N]",
