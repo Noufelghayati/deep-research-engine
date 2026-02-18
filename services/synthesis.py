@@ -642,37 +642,35 @@ def _build_quick_prep_system(request: ResearchRequest, has_person_content: bool)
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
+PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions)
 ═══════════════════════════════════════
 
-Generate 3-5 Lead Orientation bullets. Each bullet MUST:
-- Represent a DIFFERENT strategic dimension (from: capital allocation, product strategy,
-  market posture, execution risk, leadership bias, org maturity, competitive positioning, talent strategy)
-- Be grounded in explicit evidence from sources
-- Avoid repetition or paraphrasing of prior bullets
-- Convert fact → implication (surface pressure or strategic tension)
-
-If there is insufficient evidence for a dimension, omit it. Never fabricate.
-
-Examples:
-✓ "Fresh $15M capital signals aggressive 18-month expansion timeline — burn rate pressure rising"
-✓ "Product-first operator prioritizing AI/ML features over enterprise sales motions"
-✓ "Enterprise bet: Kroger pilot is make-or-break validation for platform viability"
-✓ "Org maturity gap: founder-led culture hitting scaling limits as headcount doubles"
-✗ Avoid restating the same insight in different words across bullets
-
-Then add ONE Key Pressure line: the single most important pressure or vulnerability
-this person faces, grounded in evidence. Cite the source if possible.
+FIRST, write the Key Pressure — the single most important structural tension this
+person is navigating right now. This is the FIRST thing an AE reads. It should name
+the tension specifically, not generically. Key Pressure should answer: what is the
+one thing keeping this person up at night that an AE could credibly speak to?
+2 sentences maximum.
 
 Example Key Pressure:
-✓ "Execution risk from 25% store growth in 12 months with unproven enterprise infrastructure [VIDEO 1]"
-✓ "Regulatory uncertainty: FCC drone policy shifts could stall core business expansion [PODCAST 1]"
+✓ "He's managing the structural friction of scaling a $16B+ multi-product surface area while keeping application-specific and platform teams from pulling in opposite directions. Any vendor that adds integration complexity makes his job harder — any vendor that reduces it becomes an ally."
+✓ "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk."
+
+THEN, write 5 Lead Orientation dimensions. Each dimension should:
+1. Open with the IMPLICATION for an AE — start with what this means for how you sell,
+   not what personality trait it describes
+2. Support it with one specific piece of evidence from the sources — a quote, a decision
+   they made, a pattern across multiple sources
+3. Be written as 2 sentences maximum — no bullet labels, no headers
+
+Examples:
+✓ "He'll reject any pitch that positions your tool as a reporting layer or oversight mechanism — he's on record saying finance should be operating fabric, not auditor. Come in as a partner to his GTM motion, not a check on it."
+✓ "She measures her own team's performance by technology adoption rates, not quota attainment alone — she'll evaluate your tool the same way. Have a concrete adoption and rollout plan ready before she asks."
 
 RULES:
-- Each bullet: one concise sentence, max 20 words
-- No two bullets may address the same strategic dimension
-- Key Pressure: evidence-based, cite source when possible
-- If evidence is thin: "Limited direct signal — role-typical pressures include [X]"
+- Key Pressure: 2 sentences max, specific structural tension, leads the section
+- Each dimension: 2 sentences max, AE implication first, evidence second
+- No category labels or headers on dimensions
+- No two dimensions may address the same strategic area
 - NEVER fabricate or speculate without evidence""")
 
     lines.append("")
@@ -873,13 +871,14 @@ OUTPUT FORMAT (JSON object):
     "why_it_matters": "She leads with mission, not margin — if you pitch cost savings first, you'll lose her. Frame your value in terms of waste reduction impact and she'll lean in."
   },
   "executive_orientation": {
+    "key_pressure": "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk.",
     "bullets": [
-      "Aggressive expansion: scaling from 2,000 to 2,500 stores in 12 months",
-      "Marketing-led operator: leads with sustainability narrative over cost savings",
-      "Enterprise bet: Kroger pilot is make-or-break validation for platform viability",
-      "Quality investment: prioritizing UX (AI images) despite scaling pressure"
-    ],
-    "key_pressure": "Execution risk from 25% store growth in 12 months with unproven enterprise infrastructure [VIDEO 1]"
+      "She measures her own team's performance by technology adoption rates, not quota attainment alone — she'll evaluate your tool the same way. Have a concrete adoption and rollout plan ready before she asks.",
+      "He'll reject any pitch that positions your tool as a reporting layer or oversight mechanism — he's on record saying finance should be operating fabric, not auditor. Come in as a partner to his GTM motion, not a check on it.",
+      "Don't lead with ROI projections — she's publicly stated she cares more about realistic migration timelines than cost savings. Show her your implementation blueprint first.",
+      "She treats middle management as the make-or-break layer for any new tool deployment. If you can't articulate how your onboarding works for team leads specifically, you'll stall.",
+      "His public content reveals a pattern of turning operational failures into teachable moments. Reference a specific challenge you've helped similar companies navigate — he'll engage with vulnerability over polish."
+    ]
   },
   "recent_moves": [
     {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"},
@@ -945,27 +944,23 @@ def _build_quick_prep_system_low_signal(request: ResearchRequest) -> str:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure — LOW SIGNAL MODE)
+PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Generate 3-5 Lead Orientation bullets with honest role-based inference.
-Each bullet MUST:
-- Represent a DIFFERENT strategic dimension
-- Acknowledge limited direct signal where appropriate
-- Label inferences: "Inferred from role context" or "Based on company positioning"
-- Convert available facts → implications
+FIRST, write the Key Pressure — the most likely structural tension this person is
+navigating based on role and company context. Acknowledge limited signal honestly.
+2 sentences maximum.
 
-Then add ONE Key Pressure line (role-inferred if no direct evidence).
-
-Examples:
-✓ "Limited direct signal — [title] at [company] during [growth phase] suggests expansion-focused posture"
-✓ "[Title]-focused operator — role context suggests emphasis on [likely priorities]"
-✓ "Key Pressure: Limited direct signal — role-typical exposures include [role-based pressures]"
+THEN, write up to 5 Lead Orientation dimensions with honest role-based inference.
+Each dimension should:
+1. Open with the implication for an AE — what this means for how you sell
+2. Support with whatever evidence is available, labeling inferences clearly
+3. Be written as 2 sentences maximum — no bullet labels, no headers
 
 RULES:
-- Each bullet: max 20 words
-- No two bullets may address the same dimension
-- Be honest about confidence level
+- Key Pressure: 2 sentences max, role-inferred if no direct evidence
+- Each dimension: 2 sentences max, AE implication first
+- Acknowledge limited signal where appropriate
 - NEVER fabricate or speculate without evidence""")
 
     lines.append("")
@@ -1066,12 +1061,12 @@ OUTPUT FORMAT (JSON object):
   "executive_summary": "2-3 sentence Executive Snapshot acknowledging limited signal",
   "pull_quote": null,
   "executive_orientation": {
+    "key_pressure": "Limited direct signal — based on role context, the most likely structural tension is [specific role-typical pressure]. Any vendor approaching should [implication].",
     "bullets": [
-      "Limited direct signal — [title] at [company] suggests [orientation]",
-      "[Title]-focused operator — role context suggests emphasis on [priorities]",
-      "Role details limited to [title] at [company]; tenure not publicly confirmed"
-    ],
-    "key_pressure": "Limited direct signal — role-typical exposures include [role-based pressures]"
+      "Limited direct signal on this person's preferences — based on their [title] role, they're likely evaluating tools through [specific lens]. Come prepared with [approach].",
+      "Role context suggests emphasis on [priorities] — frame your pitch around [implication] rather than [alternative].",
+      "Without direct content from this person, lead with genuine discovery about their priorities at [company] rather than assumptions."
+    ]
   },
   "recent_moves": [],
   "opening_moves": [
@@ -1265,44 +1260,34 @@ def _build_qp_sub_b_system(
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
+PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions — LOW SIGNAL)
 ═══════════════════════════════════════
 
-Generate 3-5 Lead Orientation bullets with honest role-based inference.
-Each bullet MUST:
-- Represent a DIFFERENT strategic dimension
-- Acknowledge limited direct signal where appropriate
-- Label inferences: "Inferred from role context" or "Based on company positioning"
-- Convert available facts → implications
+FIRST, write the Key Pressure — most likely structural tension based on role context.
+2 sentences max. Acknowledge limited signal.
 
-Then add ONE Key Pressure line (role-inferred if no direct evidence).
-
-RULES:
-- Each bullet: max 20 words
-- No two bullets may address the same dimension
-- Be honest about confidence level
-- NEVER fabricate or speculate without evidence""")
+THEN, write up to 5 orientation dimensions. Each: AE implication first, evidence second,
+2 sentences max, no labels/headers. Acknowledge limited signal where appropriate.""")
     else:
         lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (3-5 bullets + Key Pressure)
+PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions)
 ═══════════════════════════════════════
 
-Generate 3-5 Lead Orientation bullets. Each bullet MUST:
-- Represent a DIFFERENT strategic dimension (from: capital allocation, product strategy,
-  market posture, execution risk, leadership bias, org maturity, competitive positioning, talent strategy)
-- Be grounded in explicit evidence from sources
-- Avoid repetition or paraphrasing of prior bullets
-- Convert fact → implication (surface pressure or strategic tension)
+FIRST, write the Key Pressure — the single most important structural tension this
+person is navigating. 2 sentences max. Name the tension specifically, not generically.
 
-If there is insufficient evidence for a dimension, omit it. Never fabricate.
+THEN, write 5 orientation dimensions. Each dimension:
+1. Opens with the IMPLICATION for an AE — what this means for how you sell
+2. Supported by specific evidence (quote, decision, pattern)
+3. 2 sentences max — no bullet labels, no headers
 
-Then add ONE Key Pressure line: the single most important pressure or vulnerability
-this person faces, grounded in evidence. Cite the source if possible.
+CRITICAL: Never use the same sentence structure twice. Each dimension should use a
+different conversational mode.
 
 RULES:
-- Each bullet: one concise sentence, max 20 words
-- No two bullets may address the same strategic dimension
-- Key Pressure: evidence-based, cite source when possible
+- Key Pressure: 2 sentences max, specific, leads the section
+- Each dimension: 2 sentences max, AE implication first
+- No category labels or headers
 - NEVER fabricate or speculate without evidence""")
 
     # ── PART 2: Signals ──
@@ -1420,11 +1405,11 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "executive_orientation": {
+    "key_pressure": "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk.",
     "bullets": [
-      "Aggressive expansion: scaling from 2,000 to 2,500 stores in 12 months",
-      "Marketing-led operator: leads with sustainability narrative over cost savings"
-    ],
-    "key_pressure": "Execution risk from 25% store growth with unproven infrastructure [VIDEO 1]"
+      "She measures her own team's performance by technology adoption rates, not quota attainment alone — she'll evaluate your tool the same way. Have a concrete adoption and rollout plan ready before she asks.",
+      "He'll reject any pitch that positions your tool as a reporting layer or oversight mechanism — he's on record saying finance should be operating fabric, not auditor. Come in as a partner to his GTM motion, not a check on it."
+    ]
   },
   "opening_moves": [
     {"angle": "Primary", "suggestion": "Lead with his 'How I Screwed This Up' series — ask about the most common operational drag he sees in pre-IPO startups today."},
