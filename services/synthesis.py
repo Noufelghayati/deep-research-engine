@@ -41,6 +41,42 @@ CATEGORY_PRIORITY = ["GROWTH", "CHALLENGE", "MARKET", "PRODUCT", "TENSION", "TRA
 #  Shared helpers
 # ═══════════════════════════════════════════════════════════
 
+def _is_within_90_days(date_str: str) -> bool:
+    """Check if a date string like 'January 2026' or 'March 2025' is within 90 days of now."""
+    if not date_str:
+        return False
+    # Common formats: "January 2026", "Jan 2026", "2026-01-15", "Q1 2026"
+    today = datetime.utcnow()
+    cutoff = today - timedelta(days=90)
+    try:
+        # Try "Month Year" format
+        for fmt in ("%B %Y", "%b %Y", "%Y-%m-%d", "%B %d, %Y"):
+            try:
+                dt = datetime.strptime(date_str.strip(), fmt)
+                # For month-only formats, use the 1st of the month
+                return dt >= cutoff
+            except ValueError:
+                continue
+        # Try extracting year and month from freeform text
+        import calendar
+        months = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
+        months.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})
+        date_lower = date_str.lower()
+        year = None
+        month = None
+        for word in date_lower.split():
+            if word in months:
+                month = months[word]
+            elif word.isdigit() and len(word) == 4:
+                year = int(word)
+        if year and month:
+            dt = datetime(year, month, 1)
+            return dt >= cutoff
+    except Exception:
+        pass
+    # Can't parse — keep it (don't filter ambiguous dates)
+    return True
+
 def _format_extracted_signals(signals) -> str:
     """Format pre-extracted signals for a single source."""
     if not signals:
@@ -84,19 +120,30 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
             result["source_url"] = url
         return result
 
-    def _find_url_from_artifacts() -> str:
-        """Find the source URL using multiple strategies (quote text, title, single source)."""
-        # Strategy 1: Match quote text against transcripts (clean ellipses first)
-        clean_quote = quote_text.replace("...", " ").replace("\u2026", " ")
-        # Use multiple short fragments for matching (handles ellipses in quotes)
-        fragments = [w for w in clean_quote.split() if len(w) > 3][:8]
-        search_str = " ".join(fragments[:5]).lower() if fragments else ""
+    def _quote_in_transcript(transcript: str) -> bool:
+        """Check if the quote plausibly comes from this transcript.
+        Splits quote on ellipses/punctuation into phrases, checks each phrase."""
+        if not transcript:
+            return False
+        t_lower = transcript.lower()
+        # Split on ellipses and long dashes to get contiguous phrases
+        import re
+        phrases = re.split(r'\.{2,}|\u2026|\u2014|—', quote_text)
+        phrases = [p.strip() for p in phrases if len(p.strip()) > 15]
+        if not phrases:
+            # No long phrases — try raw first 30 chars
+            return quote_text[:30].lower() in t_lower
+        # All substantial phrases must appear in the transcript
+        return all(p.lower() in t_lower for p in phrases)
 
+    def _find_url_from_artifacts() -> str:
+        """Find the source URL using multiple strategies."""
+        # Strategy 1: Match quote phrases against transcripts
         for p in artifacts.podcasts:
-            if p.transcript_text and search_str and search_str in p.transcript_text.lower():
+            if _quote_in_transcript(p.transcript_text):
                 return p.url or ""
         for v in artifacts.videos:
-            if v.transcript_text and search_str and search_str in v.transcript_text.lower():
+            if _quote_in_transcript(v.transcript_text):
                 return v.url or ""
 
         # Strategy 2: Match source title against artifact titles
@@ -136,15 +183,11 @@ def _validate_pull_quote(pq_raw, artifacts) -> Optional[dict]:
         return _build_result(fallback_url)
 
     # No clear source — verify quote text exists in a transcript
-    clean_quote = quote_text.replace("...", " ").replace("\u2026", " ")
-    fragments = [w for w in clean_quote.split() if len(w) > 3][:8]
-    search_str = " ".join(fragments[:5]).lower() if fragments else ""
-
     for p in artifacts.podcasts:
-        if p.transcript_text and search_str and search_str in p.transcript_text.lower():
+        if _quote_in_transcript(p.transcript_text):
             return _build_result(p.url or "")
     for v in artifacts.videos:
-        if v.transcript_text and search_str and search_str in v.transcript_text.lower():
+        if _quote_in_transcript(v.transcript_text):
             return _build_result(v.url or "")
 
     logger.info(f"Pull quote rejected: not found in any transcript ({quote_text[:60]}...)")
@@ -678,20 +721,25 @@ RULES:
 - Include the core tension or trade-off if possible
 - Do NOT repeat orientation lines verbatim""")
 
+    today = datetime.utcnow()
+    cutoff = today - timedelta(days=90)
     lines.append("")
-    lines.append("""═══════════════════════════════════════
+    lines.append(f"""═══════════════════════════════════════
 PART 4: RECENT MOVES (last 90 days, max 4 events)
 ═══════════════════════════════════════
 
+TODAY'S DATE: {today.strftime('%B %d, %Y')}
+CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
+
 Identify up to 4 concrete, factual events involving this person or their company
-from the LAST 90 DAYS. These must be real events with specific dates found in sources.
+that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
 Examples:
-{"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}
-{"event": "Launched Progress AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}
+{{"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}}
+{{"event": "Launched Progress AI product line", "date": "December 2025", "source_url": "https://...", "source_title": "Company Blog"}}
 
 RULES:
-- ONLY include events with clear dates within the last 90 days from today
+- ONLY include events dated AFTER {cutoff.strftime('%B %d, %Y')} — reject anything older
 - If no events from the last 90 days exist in sources, return an EMPTY array []
 - Never fabricate dates or events
 - Max 15 words per event description
@@ -883,13 +931,18 @@ RULES:
 - Acknowledge limited signal honestly
 - Do NOT speculate on psychology""")
 
+    today_ls = datetime.utcnow()
+    cutoff_ls = today_ls - timedelta(days=90)
     lines.append("")
-    lines.append("""═══════════════════════════════════════
+    lines.append(f"""═══════════════════════════════════════
 PART 4: RECENT MOVES (last 90 days — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Same rules as standard mode. Up to 4 factual events from the last 90 days.
-If no dated events exist, return an EMPTY array [].
+TODAY'S DATE: {today_ls.strftime('%B %d, %Y')}
+CUTOFF: {cutoff_ls.strftime('%B %d, %Y')}
+
+Same rules as standard mode. Up to 4 factual events AFTER {cutoff_ls.strftime('%B %d, %Y')}.
+If no dated events exist within this window, return an EMPTY array [].
 Never fabricate dates or events.""")
 
     lines.append("")
@@ -1026,16 +1079,21 @@ RULES:
 - Lead with their strategic posture, not their biography
 - Include the core tension or trade-off if possible""")
 
+    today = datetime.utcnow()
+    cutoff = today - timedelta(days=90)
     lines.append("")
-    lines.append("""═══════════════════════════════════════
+    lines.append(f"""═══════════════════════════════════════
 TASK 2: RECENT MOVES (last 90 days, max 4 events)
 ═══════════════════════════════════════
 
+TODAY'S DATE: {today.strftime('%B %d, %Y')}
+CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
+
 Identify up to 4 concrete, factual events involving this person or their company
-from the LAST 90 DAYS. These must be real events with specific dates found in sources.
+that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
 RULES:
-- ONLY include events with clear dates within the last 90 days from today
+- ONLY include events dated AFTER {cutoff.strftime('%B %d, %Y')} — reject anything older
 - If no events from the last 90 days exist in sources, return an EMPTY array []
 - Never fabricate dates or events
 - Max 15 words per event description
@@ -1946,6 +2004,9 @@ async def run_quick_prep_only(
                 recent_moves = []
                 for rm in rm_raw[:4]:
                     if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                        if not _is_within_90_days(rm["date"]):
+                            logger.info(f"Recent move filtered (too old): {rm['date']} — {rm['event'][:50]}")
+                            continue
                         recent_moves.append({
                             "event": rm["event"],
                             "date": rm["date"],
@@ -2151,6 +2212,9 @@ async def synthesize(
                 rm_list = []
                 for rm in rm_raw[:4]:
                     if isinstance(rm, dict) and rm.get("event") and rm.get("date"):
+                        if not _is_within_90_days(rm["date"]):
+                            logger.info(f"Recent move filtered (too old): {rm['date']} — {rm['event'][:50]}")
+                            continue
                         rm_list.append({
                             "event": rm["event"],
                             "date": rm["date"],
