@@ -690,10 +690,21 @@ Generate 5 Intel cards for this person. Each card should:
 3. Rank the cards by tactical value — the highest leverage signal comes first,
    the most contextual last. The ordering itself is part of the intelligence.
 
-4. Draw from a DIFFERENT source type for each card where possible — don't pull
-   4 signals from articles and 1 from video. Source diversity signals depth.
+4. HARD RULE: No more than 2 cards from the same source type (video/article/podcast).
+   If 3+ sources are the same type, skip the weakest and find signal from a different type.
 
 NEVER use the word "reveals" more than once across all 5 cards.
+
+PERSON-FOCUS: Every card is about how this PERSON thinks or decides — not what
+their company shipped. Start with He/She, never the company name.
+  WRONG: "NVIDIA is aggressively moving into the Software-as-a-Model space..."
+  RIGHT: "He’s betting his next growth cycle on open-sourcing not just models but training data..."
+
+WORD LIMIT: Max 40 words per card. Cut filler, keep specifics.
+
+TACTICAL PRECISION: The so-what must be specific enough that it could ONLY apply
+to this person. "Position your offerings" = too generic, fails the test.
+"Come with conservative projections you can defend, not optimistic ones" = specific.
 
 Examples:
 ✅ "His 2008 Goldman experience left him permanently skeptical of growth narratives — he's been burned by exuberance before and will probe your numbers harder than most. Come with conservative projections you can defend, not optimistic ones you hope he accepts."
@@ -981,7 +992,13 @@ With limited person-level content, generate 5 Intel cards that:
 4. CLEARLY LABEL what is observed vs inferred
 
 Frame EVERY signal around the person, even when using company data.
-Each card: 2-3 sentences max, plain prose. Rank by tactical value.
+Start every card with He/She, never the company name.
+
+WORD LIMIT: Max 40 words per card. Plain prose, no filler.
+HARD RULE: No more than 2 cards from the same source type.
+TACTICAL PRECISION: Each so-what must be specific to THIS person —
+generic advice like "position your solution" fails the test.
+Rank by tactical value.
 
 SIGNAL CATEGORIES (for icon selection only):
 🎯 BACKGROUND — identity, role context, career positioning
@@ -1298,10 +1315,12 @@ RULES:
 PART 2: INTEL (5 cards — LOW SIGNAL)
 ═══════════════════════════════════════
 
-With limited signal, generate 5 Intel cards. Lead with the person, connect role
-context to likely challenges, end each with tactical so-what for the AE.
-Label inferences clearly. 2-3 sentences max per card, plain prose.
-Rank by tactical value. Diversify source types where possible.
+With limited signal, generate 5 Intel cards. Lead with the person (start
+every card with He/She, never the company name), connect role context to
+likely challenges, end each with a person-specific tactical so-what.
+Label inferences clearly. Max 40 words per card, plain prose.
+Rank by tactical value. HARD RULE: No more than 2 cards from the same source type.
+Generic so-whats like "position your solution" fail — be specific to this person.
 
 SIGNAL CATEGORIES (for icon selection only):
 🎯 BACKGROUND — identity, role context
@@ -1316,11 +1335,15 @@ PART 2: INTEL (5 cards, ranked by tactical value)
 
 Generate 5 Intel cards. Each card:
 1. States the insight in plain language — no "reveals" formula
-2. Ends with tactical so-what for the AE
+2. Ends with person-specific tactical so-what for the AE
 3. Ranked by tactical value (highest leverage first)
-4. Different source type for each where possible
+4. HARD RULE: No more than 2 cards from same source type (video/article/podcast)
 
 NEVER use "reveals" more than once across all 5 cards.
+
+Start every card with He/She, never the company name. Max 40 words per card.
+Generic so-whats like "position your offerings" fail — make it specific to
+this person's psychology and situation.
 
 SIGNAL CATEGORIES (for icon selection only):
 🚀 GROWTH — expansion, scaling, market entry
