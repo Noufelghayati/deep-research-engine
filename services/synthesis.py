@@ -749,25 +749,38 @@ or null if no direct quotes available.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
+PART 3: EXECUTIVE SNAPSHOT (2-3 sentences)
 ═══════════════════════════════════════
 
-Write ONE punchy sentence that captures the executive's current posture in context.
-This appears directly under their name/title — a sales rep glances at it in 2 seconds.
+Based on everything gathered about this person, write a 2-3 sentence
+Executive Snapshot that answers three things in flowing prose — not
+as labeled sections:
 
-Format: "[Role-descriptor] [doing what] [in what context/tension]"
+1. What is this person reacting against or trying to prove based on
+   their career trajectory?
+2. What do they care about most in their current role based on how
+   they talk publicly?
+3. What does that mean tactically for how someone should sell to or
+   engage with them?
+
+Avoid generic descriptors like "passionate," "results-driven," or
+"customer-obsessed." Every sentence should contain information an AE
+couldn't get from reading the LinkedIn profile themselves. If you
+can't find enough signal to answer all three, say so — do not
+fabricate or generalize.
 
 Examples:
-✓ "Founder-CEO reinvesting break-even earnings into an aggressive AI/robotics pivot."
-✓ "New CEO (8 months) betting on aggressive retail expansion while proving enterprise viability."
-✓ "Product-first CTO scaling from startup to platform — managing technical debt vs feature velocity."
+✓ "Former CFO turned ecosystem builder — Adil thinks in systems and friction points, not features. He's been inside Rippling's operational engine long enough to have zero patience for tools that add complexity. Sell to the outcome he's accountable for: making founders operationally dangerous faster."
+✓ "Gia has lived through bad software migrations and built her entire philosophy around not repeating them. She'll evaluate you on how realistic and role-specific your implementation process is before she ever considers price. Come in with a clear onboarding story or don't come in at all."
+✓ "Creative director who's learned to speak in data to get what he wants — he bridges brand intuition with business rigor because he's had to. He's not a feelings-first creative, he's a systems thinker in a creative's clothing. Pitch him on outcomes and craft simultaneously or you'll lose him on one dimension."
 
 RULES:
-- ONE sentence only, maximum 25 words
+- 2-3 sentences, flowing prose
 - Skip the person's name (it's already shown above)
-- Lead with their strategic posture, not their biography
-- Include the core tension or trade-off if possible
-- Do NOT repeat orientation lines verbatim""")
+- Must reveal HOW to engage, not just WHO they are
+- Every sentence must contain signal beyond their LinkedIn profile
+- Do NOT repeat orientation lines verbatim
+- If insufficient signal, explicitly flag it rather than fabricating""")
 
     today = datetime.utcnow()
     cutoff = today - timedelta(days=90)
@@ -827,7 +840,7 @@ OUTPUT FORMAT (JSON object):
   // NOT a role from 2-3 positions ago. If their current role is "CEO at Acme" and their
   // LinkedIn shows "VP Sales at BigCorp" right before that, use "VP Sales, BigCorp".
   // If they are currently at their ONLY known role, return null.
-  "executive_summary": "Single-sentence snapshot, max 25 words",
+  "executive_summary": "2-3 sentence Executive Snapshot (see rules above)",
   "pull_quote": {
     "quote": "It's to me truly unacceptable that we continue to waste food at this scale...",
     "source": "Jordan Schenck | Flashfood - YouTube - Apr 2, 2025 - 04:45",
@@ -965,19 +978,25 @@ For inferred signals, set source type to "article" and use the most relevant com
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SNAPSHOT (1 sentence, max 25 words — LOW SIGNAL MODE)
+PART 3: EXECUTIVE SNAPSHOT (2-3 sentences — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Write ONE short sentence framing what we know about this person's posture.
+Based on whatever limited information is available, write a 2-3 sentence
+Executive Snapshot that answers in flowing prose:
 
-Examples:
-✓ "[Title] at [Company] navigating [key role-typical challenge] with limited public signal."
-✓ "[Title] operating in [growth/transition context] — direct executive content unavailable."
+1. What can we infer this person is reacting against or trying to prove
+   based on their career trajectory?
+2. What do they likely care about most based on their role and company context?
+3. What does that mean tactically for how someone should approach them?
+
+If you can't find enough signal to answer all three confidently, say so —
+do not fabricate or generalize. Acknowledge limited signal honestly.
 
 RULES:
-- ONE sentence only, maximum 25 words
-- Acknowledge limited signal honestly
-- Do NOT speculate on psychology""")
+- 2-3 sentences, flowing prose
+- Acknowledge limited signal where applicable
+- Do NOT speculate beyond what sources support
+- If insufficient signal, explicitly flag it rather than fabricating""")
 
     today_ls = datetime.utcnow()
     cutoff_ls = today_ls - timedelta(days=90)
@@ -1020,7 +1039,7 @@ OUTPUT FORMAT (JSON object):
   "prior_role": null,
   // ^ Their IMMEDIATELY PREVIOUS role (right before current position), or null if unknown.
   // Must be the role directly before their current one — never a role from 2+ positions ago.
-  "executive_summary": "Single-sentence snapshot acknowledging limited signal, max 25 words",
+  "executive_summary": "2-3 sentence Executive Snapshot acknowledging limited signal",
   "pull_quote": null,
   "executive_orientation": {
     "bullets": [
@@ -1094,38 +1113,40 @@ def _build_qp_sub_a_system(
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-TASK 1: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
+TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences — LOW SIGNAL)
 ═══════════════════════════════════════
 
-Write ONE short sentence framing what we know about this person's posture.
+Based on whatever limited information is available, write a 2-3 sentence
+Executive Snapshot answering in flowing prose:
+1. What can we infer about their career trajectory?
+2. What do they likely care about based on role and company context?
+3. What does that mean tactically for how to engage them?
 
-Examples:
-✓ "[Title] at [Company] navigating [key role-typical challenge] with limited public signal."
-✓ "[Title] operating in [growth/transition context] — direct executive content unavailable."
+Acknowledge limited signal honestly. Do NOT fabricate or generalize.
 
 RULES:
-- ONE sentence only, maximum 25 words
-- Acknowledge limited signal honestly
-- Do NOT speculate on psychology""")
+- 2-3 sentences, flowing prose
+- Acknowledge limited signal where applicable
+- If insufficient signal, explicitly flag it""")
     else:
         lines.append("""═══════════════════════════════════════
-TASK 1: EXECUTIVE SNAPSHOT (1 sentence, max 25 words)
+TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences)
 ═══════════════════════════════════════
 
-Write ONE punchy sentence that captures the executive's current posture in context.
-This appears directly under their name/title — a sales rep glances at it in 2 seconds.
+Based on everything gathered, write a 2-3 sentence Executive Snapshot
+answering in flowing prose — not as labeled sections:
+1. What is this person reacting against or trying to prove?
+2. What do they care about most based on how they talk publicly?
+3. What does that mean tactically for how to sell to or engage them?
 
-Format: "[Role-descriptor] [doing what] [in what context/tension]"
-
-Examples:
-✓ "Founder-CEO reinvesting break-even earnings into an aggressive AI/robotics pivot."
-✓ "New CEO (8 months) betting on aggressive retail expansion while proving enterprise viability."
+Avoid generic descriptors like "passionate" or "results-driven."
+Every sentence should contain information beyond their LinkedIn profile.
+If insufficient signal, say so — do not fabricate.
 
 RULES:
-- ONE sentence only, maximum 25 words
-- Skip the person's name (it's already shown above)
-- Lead with their strategic posture, not their biography
-- Include the core tension or trade-off if possible""")
+- 2-3 sentences, flowing prose
+- Must reveal HOW to engage, not just WHO they are
+- Do NOT repeat orientation lines verbatim""")
 
     today = datetime.utcnow()
     cutoff = today - timedelta(days=90)
@@ -1162,7 +1183,7 @@ OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
   "prior_role": "CMO, Impossible Foods",
-  "executive_summary": "Single-sentence snapshot, max 25 words",
+  "executive_summary": "2-3 sentence Executive Snapshot",
   "recent_moves": [
     {"event": "Secured $15M strategic funding round", "date": "January 2026", "source_url": "https://...", "source_title": "TechCrunch"}
   ]
