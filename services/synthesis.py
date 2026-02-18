@@ -1839,6 +1839,8 @@ def _build_signals(raw_signals: list) -> List[Signal]:
             continue
 
         category = (raw.get("category") or "").upper()
+        # Strip emoji prefixes Gemini sometimes adds
+        category = re.sub(r"^[^\w]+", "", category).strip()
         # Map common Gemini category variants to our valid set
         if category not in CATEGORY_ICONS:
             mapped = _CATEGORY_ALIASES.get(category)
