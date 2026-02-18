@@ -82,85 +82,79 @@ class ResearchConfidence(BaseModel):
     )
 
 
-# ── Executive Profile & Strategic Context (Dossier section 2) ──
+# ── Deep Dive Models ──
 
-class LeadershipOrientation(BaseModel):
-    growth_stage: str = ""
-    strategic_posture: str = ""
-    decision_making_bias: str = ""
-    strategic_implication: str = ""
-
-
-class PressurePoint(BaseModel):
-    name: str = ""
-    why_it_matters: str = ""
-    evidence: str = ""
+class DeepPressurePoint(BaseModel):
+    """A single pressure point in the Deep Pressure section."""
+    name: str = Field(default="", description="3-5 word label")
+    description: str = Field(default="", description="2-3 sentences with citations")
+    receptivity: str = Field(default="", description="What this makes them more/less receptive to")
+    forward_facing: bool = Field(default=False, description="Is this a future-facing risk?")
+    inferred: bool = Field(default=False, description="Is this inferred rather than directly stated?")
 
 
-class ExecutiveProfile(BaseModel):
-    leadership_orientation: LeadershipOrientation = Field(
-        default_factory=LeadershipOrientation
-    )
-    pressure_points: List[PressurePoint] = Field(default_factory=list)
+class QuoteEvidence(BaseModel):
+    """Quote evidence for Pattern Evidence section."""
+    quote: str = Field(default="", description="The strongest quote proving the thesis")
+    source: str = Field(default="", description="Speaker | Platform - Date - Timestamp")
+    source_url: str = Field(default="", description="URL to source")
+    why_strongest: str = Field(default="", description="Why this quote is the strongest proof")
 
 
-# ── Dossier sections ──
-
-class DossierBackground(BaseModel):
-    """Section 1: Identity & Background — max 6 bullets."""
-    bullets: List[str] = Field(default_factory=list, max_length=6)
-
-
-class DossierStrategicFocus(BaseModel):
-    """Section 3: Current Strategic Focus — 3-6 synthesized themes."""
-    themes: List[dict] = Field(
-        default_factory=list,
-        description="Each: {category, icon, title, bullets, strategic_implication}",
-    )
+class PatternEvidence(BaseModel):
+    """Pattern Evidence section proving Core Read thesis."""
+    thesis: str = Field(default="", description="The Core Read thesis being proven")
+    quote_evidence: Optional[QuoteEvidence] = None
+    behavior_evidence: str = Field(default="", description="Behavioral proof, 2-3 sentences")
+    company_evidence: str = Field(default="", description="Company-level proof, 2-3 sentences")
 
 
-class DossierQuote(BaseModel):
-    """A single quote in Stated Perspectives."""
-    topic: str = Field(description="e.g. 'On Food Waste'")
-    quote: str = Field(description="15-40 words, direct quote")
-    source: str = Field(description="Source title + timestamp/page")
+class OwnWordsQuote(BaseModel):
+    """A single quote in the In Their Own Words section."""
+    quote: str = Field(default="", description="Verbatim quote")
+    source: str = Field(default="", description="Speaker | Platform | Date | Timestamp")
+    source_url: str = Field(default="", description="URL to source")
+    insight: str = Field(default="", description="What this reveals beyond synthesis")
 
 
-class DossierMomentum(BaseModel):
-    """Recent Company Momentum — max 6 bullets (flat)."""
-    bullets: List[str] = Field(default_factory=list, max_length=6)
-
-
-class DossierMomentumGroup(BaseModel):
-    """Momentum items grouped by recency period."""
-    period: str = ""  # "2025-Present", "2024", "Established Traction"
-    bullets: List[str] = Field(default_factory=list)
+class InTheirOwnWords(BaseModel):
+    """In Their Own Words section."""
+    core: List[OwnWordsQuote] = Field(default_factory=list, description="Quotes proving Core Read")
+    supporting: List[OwnWordsQuote] = Field(default_factory=list, description="Context quotes")
+    outlier: List[OwnWordsQuote] = Field(default_factory=list, description="Contradicting quotes")
+    additional_count: int = Field(default=0, description="Extra quotes beyond displayed 10")
+    limited_coverage_note: str = Field(default="", description="Note if fewer than 4 quotes")
 
 
 class DossierSource(BaseModel):
     """A single source in the appendix."""
     type: str = Field(description="'primary' or 'supporting'")
-    icon: str = ""
+    label: str = Field(default="", description="PODCAST / VIDEO / ARTICLE")
     title: str = ""
     platform: str = ""
     date: str = ""
     duration: Optional[str] = None
     url: str = ""
+    context_only: bool = Field(default=False, description="Source provided context but no quotes")
+    # Backward compat fields (old dossier sources had icon)
+    icon: str = ""
 
 
 class FullDossier(BaseModel):
-    """VIEW 2: Full Dossier."""
+    """VIEW 2: Deep Dive (replaces Full Dossier)."""
     research_confidence: Optional[ResearchConfidence] = None
     thin_signal_warning: Optional[str] = None
-    background: DossierBackground = Field(default_factory=DossierBackground)
-    executive_profile: Optional[ExecutiveProfile] = None
-    strategic_focus: DossierStrategicFocus = Field(
-        default_factory=DossierStrategicFocus
-    )
-    quotes: List[DossierQuote] = Field(default_factory=list)
-    momentum: DossierMomentum = Field(default_factory=DossierMomentum)
-    momentum_grouped: Optional[List[DossierMomentumGroup]] = None
+    deep_pressure: List[DeepPressurePoint] = Field(default_factory=list)
+    pattern_evidence: Optional[PatternEvidence] = None
+    in_their_own_words: Optional[InTheirOwnWords] = None
     sources: List[DossierSource] = Field(default_factory=list)
+    # Backward compat — old fields kept as empty defaults so cached data doesn't crash
+    background: Optional[dict] = None
+    executive_profile: Optional[dict] = None
+    strategic_focus: Optional[dict] = None
+    quotes: List[dict] = Field(default_factory=list)
+    momentum: Optional[dict] = None
+    momentum_grouped: Optional[list] = None
 
 
 class RecentMove(BaseModel):

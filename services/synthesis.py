@@ -9,17 +9,14 @@ from models.responses import (
     OpeningMove,
     RecentMove,
     FullDossier,
-    DossierBackground,
-    DossierStrategicFocus,
-    DossierQuote,
-    DossierMomentum,
-    DossierMomentumGroup,
     DossierSource,
     ExecutiveOrientation,
     ResearchConfidence,
-    ExecutiveProfile,
-    LeadershipOrientation,
-    PressurePoint,
+    DeepPressurePoint,
+    PatternEvidence,
+    QuoteEvidence,
+    InTheirOwnWords,
+    OwnWordsQuote,
     CATEGORY_ICONS,
 )
 from config import settings
@@ -1602,20 +1599,15 @@ If no direct quotes available, return:
 # ═══════════════════════════════════════════════════════════
 
 def _build_dossier_system(request: ResearchRequest, has_person_content: bool) -> str:
+    """Build Deep Dive prompt (replaces Full Dossier)."""
     lines = [
-        "You are an EXECUTIVE INTELLIGENCE engine building a deep research dossier for B2B sales prep.",
+        "You are an EXECUTIVE INTELLIGENCE engine building a Deep Dive research brief for B2B sales prep.",
         "",
-        "YOUR TASK: Reveal how this executive THINKS, what pressures they navigate,",
-        "and where they're vulnerable. This is EXECUTIVE PSYCHOLOGY, not company news.",
+        "YOUR TASK: Build four evidence-backed sections that PROVE the intelligence in Quick Prep.",
+        "Quick Prep is where you think. Deep Dive is where you prove.",
         "",
-        "PERSON-FIRST RULE (MANDATORY when target person is specified):",
-        "The individual MUST always be the primary object of analysis.",
-        "Company context exists ONLY to illuminate the PERSON's world.",
-        "Every section must be framed through the person's lens.",
-        "NEVER lead with company strategy — lead with the PERSON.",
-        "",
-        "Analyze ALL sources and produce a structured dossier with 6 sections.",
-        "This must be SYNTHESIZED intelligence — cluster themes across sources, not per-source summaries.",
+        "PERSON-FIRST RULE: The individual MUST always be the primary object of analysis.",
+        "Company context exists ONLY to illuminate the PERSON.",
         "",
         f"TARGET COMPANY: {request.target_company}",
     ]
@@ -1627,199 +1619,128 @@ def _build_dossier_system(request: ResearchRequest, has_person_content: bool) ->
     if not has_person_content and request.target_name:
         lines.append("")
         lines.append("ROLE-BASED FALLBACK: No direct person interviews available.")
-        lines.append(f"- Focus on what someone in the role of {request.target_title or 'executive'} at {request.target_company} would be navigating")
-        lines.append("- Generate role-based insights, labeling them as 'Derived from role context, not direct statement'")
-        lines.append("- Never fabricate quotes or attribute statements to the target person")
+        lines.append("Label inferences clearly. Never fabricate quotes.")
 
     lines.append("")
-    lines.append("""SYNTHESIS QUALITY (MANDATORY):
-- INTERPRET, don't just summarize. Your job is to reveal MEANING behind facts.
-  BAD: "Company grew 25% last year" (just restating a fact)
-  GOOD: "25% growth in 12 months creates execution risk — infrastructure must scale faster than revenue"
-- Every bullet should answer "so what?" — connect facts to pressures, trade-offs, and implications.
-- Cross-reference sources: if VIDEO 1 says X and ARTICLE 3 says Y, synthesize the pattern.
-- Never produce a grocery list of disconnected facts. Weave a narrative about the PERSON.
-
-EVIDENCE & CITATION RULES (MANDATORY):
+    lines.append("""EVIDENCE & CITATION RULES:
 - EVERY factual claim MUST include an inline citation: [PODCAST 1], [VIDEO 2], [ARTICLE 4], etc.
-- Citation format: [PODCAST N] for podcast sources, [VIDEO N] for YouTube sources, [ARTICLE N] for article sources
-- N corresponds to the source number in the SOURCE MATERIAL
 - Sources are numbered: podcasts first, then videos, then articles (continuous sequence)
-- So if there are 1 podcast and 2 videos: PODCAST 1 = SOURCE 1, VIDEO 2 = SOURCE 2, VIDEO 3 = SOURCE 3, ARTICLE 4 = SOURCE 4, etc.
-- Place citations at the END of the specific claim they support, not at the end of a paragraph
+- Place citations at the END of the specific claim they support
 - Multiple sources for one claim: [VIDEO 1, ARTICLE 3]
-- If inferring from role context (no source), label: "Inferred from role context"
-- No personality traits unless directly stated in sources
-- Vulnerabilities must be based on: timelines, role transitions, stated priorities,
-  competitive context, scaling velocity — NOT psychological speculation
 
-RECENCY & TENURE WEIGHTING:
+RECENCY WEIGHTING:
 - Prioritize content from the past 6 months
-- De-weight content older than 18 months
-- If executive changed roles within past 12 months, prioritize post-transition content""")
+- De-weight content older than 18 months""")
 
     lines.append("")
-    lines.append("""OUTPUT FORMAT (JSON object with 7 sections):
+    lines.append("""OUTPUT FORMAT (JSON object with 4 sections):
 
-⚠️ CRITICAL: The example below is ONLY to show JSON structure and field names.
-DO NOT copy any text, names, quotes, facts, or numbers from this example into your output.
-Your output must contain ONLY information from the SOURCE MATERIAL provided above.
-
---- FORMAT EXAMPLE (structure only, do NOT copy content) ---
 {
-  "pull_quote": {"quote": "<verbatim quote from transcript>", "source": "Source - Platform - Date - MM:SS", "source_url": "https://...", "why_it_matters": "1-2 sentence tactical implication for the AE"},
-  "background": [
-    "<role> at <company> (<date>, promoted from <prior role>) [SOURCE N]",
-    "Previously: <prior role> at <prior company> (<years>) [SOURCE N]",
-    "Career arc: <domain1> → <domain2> → <current domain>"
-  ],
-  "executive_profile": {
-    "leadership_orientation": {
-      "growth_stage": "<phase description> — <specific metrics from sources> [SOURCE N]",
-      "strategic_posture": "<approach/philosophy> — <how they lead, evidence-based> [SOURCE N]",
-      "decision_making_bias": "<bias description> — <specific evidence of this pattern> [SOURCE N]",
-      "strategic_implication": "<5-10 word observational note>"
+  "deep_pressure": [
+    {
+      "name": "Scaling Friction",
+      "description": "He is managing the structural tension between application-specific teams and horizontal platform teams as the company scales past $16B. He described this publicly as one of the hardest operational problems at their stage. [VIDEO 2] Anyone selling to him needs to show how their tool reduces this tension, not adds to it.",
+      "receptivity": "More receptive to tools that reduce cross-team friction; less receptive to anything that adds integration complexity.",
+      "forward_facing": false
     },
-    "pressure_points": [
-      {
-        "name": "<short label>",
-        "why_it_matters": "<1-2 sentences on business impact> [SOURCE N]",
-        "evidence": "<specific quote or fact proving this> [SOURCE N]"
-      }
-    ]
+    {
+      "name": "AI Economics Inflection",
+      "description": "He is publicly questioning whether current AI software economics hold as compute efficiency improves through 2030. [ARTICLE 5] Any AI-adjacent vendor he evaluates will face questions about long-term unit economics and business model durability.",
+      "receptivity": "Come prepared to talk about where your pricing goes as underlying infrastructure costs drop.",
+      "forward_facing": true,
+      "inferred": true
+    }
+  ],
+  "pattern_evidence": {
+    "thesis": "He publicly advocates for eliminating friction while simultaneously creating it through his own constraint philosophy.",
+    "quote_evidence": {
+      "quote": "They are not the auditor of performance, they are not a check and balance...",
+      "source": "CFO Thought Leader - 2022-10-19 - 00:45",
+      "source_url": "https://...",
+      "why_strongest": "This is the clearest on-record statement of his operating philosophy."
+    },
+    "behavior_evidence": "Despite advocating for eliminating overhead, he personally administers payroll at scale to identify product gaps. The pattern is consistent: he creates tension deliberately to stress-test systems. [VIDEO 2]",
+    "company_evidence": "Rippling's compound product strategy — building deeply integrated HR, IT, and Finance simultaneously — is his philosophy operating at company scale. [VIDEO 3]"
   },
-  "strategic_focus": [
-    {
-      "category": "GROWTH",
-      "title": "<THEME IN CAPS>",
-      "bullets": [
-        "<strategic initiative with specific detail> [SOURCE N, SOURCE M]"
-      ],
-      "strategic_implication": "<5-10 word so-what insight>"
-    }
-  ],
-  "quotes": [
-    {
-      "topic": "<topic label>",
-      "quote": "<verbatim quote from source>",
-      "source": "<speaker> | <platform> - <date> - <timestamp>"
-    }
-  ],
-  "momentum_grouped": [
-    {
-      "period": "2025-Present",
-      "bullets": [
-        "<event with date and context> [SOURCE N]"
-      ]
-    },
-    {
-      "period": "2024",
-      "bullets": [
-        "<event with date and context> [SOURCE N]"
-      ]
-    },
-    {
-      "period": "Established Traction",
-      "bullets": [
-        "<long-term achievement or foundation metric> [SOURCE N]"
-      ]
-    }
-  ],
+  "in_their_own_words": {
+    "core": [
+      {
+        "quote": "If finance isn't playing the role of a true business partner, finance will fail.",
+        "source": "Adil Syed | CFO Thought Leader | 2022-10-19 | 00:30",
+        "source_url": "https://...",
+        "insight": "He is not describing an aspiration — he is describing a standard he holds vendors to as well."
+      }
+    ],
+    "supporting": [
+      {
+        "quote": "Watching that play out at Goldman Sachs really changed my perspective on risk.",
+        "source": "Adil Syed | CFO Thought Leader | 2022-10-19 | 04:50",
+        "source_url": "https://...",
+        "insight": "The 2008 experience explains why he probes vendor stability harder than most buyers."
+      }
+    ],
+    "outlier": [
+      {
+        "quote": "We rarely talk openly about the ways we screw up building companies.",
+        "source": "Adil Syed | LinkedIn | 2024-05-01",
+        "source_url": "https://...",
+        "insight": "This complicates the ruthless operator framing — he is more self-aware about pressure than his positioning suggests."
+      }
+    ],
+    "additional_count": 0
+  },
   "sources": [
     {
       "type": "primary",
-      "icon": "📹",
-      "title": "<source title>",
-      "platform": "<platform>",
-      "date": "<date>",
-      "duration": "<duration>",
-      "url": "<url>"
-    },
-    {
-      "type": "supporting",
-      "icon": "📄",
-      "title": "<source title>",
-      "platform": "<platform>",
-      "date": "<date>",
-      "duration": null,
-      "url": "<url>"
+      "label": "PODCAST",
+      "title": "Source title",
+      "platform": "Platform",
+      "date": "2026-01-23",
+      "duration": "28:00",
+      "url": "https://...",
+      "context_only": false
     }
   ]
 }
---- END FORMAT EXAMPLE ---
 
-═══════════════════════════════════════
 SECTION RULES:
-═══════════════════════════════════════
 
-0. PULL QUOTE (1 standout direct quote):
-   - The single most revealing, powerful direct quote from the executive
-   - Must be VERBATIM from a podcast transcript or video transcript (15-40 words)
-   - STRONGLY prefer quotes from podcast/interview transcripts over any other source
-   - NEVER use text from articles or LinkedIn posts — only spoken words from audio/video
-   - Choose a quote that reveals their thinking, philosophy, or pressure
-   - This is displayed prominently in the UI — pick the one that makes a sales rep say "now I understand this person"
-   - If no podcast/video transcripts exist (company-only search or no interviews), set to null
-   - Do NOT fabricate or paraphrase — verbatim only
+1. DEEP PRESSURE (exactly 3 pressure points):
+   - Evidence-backed situational tensions this person is navigating NOW
+   - Specific to THIS person at THIS moment — not generic role pressures
+   - Ordered by immediacy: most acute first, background context last
+   - At least one must be forward-facing (set forward_facing: true)
+   - Each: name (3-5 words), description (2-3 sentences with citations),
+     receptivity (1 sentence on what this makes them more/less open to)
+   - If inferred rather than directly stated, set inferred: true
+   - Never restate Quick Prep content verbatim — go deeper
 
-1. BACKGROUND (max 6 bullets):
-   - Role, prior companies, years of experience
-   - Include narrative context (not just resume bullets)
-   - Career arc showing how they got here
-   - No speculation — only verified facts from sources
+2. PATTERN EVIDENCE (proves the Core Read thesis):
+   - thesis: restate the Core Read thesis being proven
+   - quote_evidence: single strongest quote proving the thesis + why
+   - behavior_evidence: a decision/action/pattern that proves it behaviorally (2-3 sentences)
+   - company_evidence: organizational action reflecting the pattern at scale (2-3 sentences)
+   - If evidence type missing: use "Insufficient source coverage for [type] evidence."
+   - NEVER fabricate evidence. Only support — do not expand — the thesis.
+   - If evidence contradicts the thesis, flag it clearly.
 
-2. EXECUTIVE PROFILE (NEW — critical section):
+3. IN THEIR OWN WORDS (6-10 quotes organized by relevance):
+   - core: quotes directly proving Core Read thesis (2-5 quotes)
+   - supporting: quotes adding context/dimension (max 3)
+   - outlier: quotes that complicate/contradict (max 2, omit if none)
+   - Each: exact quote, source with date/timestamp, one insight line
+   - NEVER summarize or paraphrase. Verbatim only.
+   - Skip generic business language unless contextually essential
+   - If fewer than 4 quotes: add note about limited coverage
+   - additional_count: number of extra quotes beyond displayed 10
 
-   LEADERSHIP ORIENTATION:
-   - growth_stage: What phase? Specific metrics + trajectory + tenure context
-   - strategic_posture: Primary approach/philosophy, what they lead with, how they balance priorities
-   - decision_making_bias: Growth vs efficiency, speed vs quality, risk tolerance — show evidence
-   - strategic_implication: 5-10 word observational note (e.g. "Suggests openness to scalable infrastructure")
+4. SOURCES:
+   - type: "primary" (direct person interviews) or "supporting" (company/context)
+   - label: PODCAST / VIDEO / ARTICLE (plain text, no emoji)
+   - context_only: true if source provided context but no direct quotes
+   - Final summary line is computed client-side from source counts""")
 
-   PRESSURE POINTS & VULNERABILITIES (3-4 thematic clusters):
-   Each cluster MUST be EVIDENCE-BASED:
-   - Name the pressure/vulnerability specifically
-   - Explain why it matters (stakes, consequences)
-   - Cite evidence from sources with [VIDEO X] or [ARTICLE X] references
-   - Be specific about what could break
-   - NEVER speculate on vulnerabilities without direct evidence
-   - If evidence is thin: label as "Inferred from role context" and explain reasoning
-
-   Common themes to consider: Execution Risk, Credibility Window, Commercial Tension,
-   Market Position, Technical Debt, Organizational Strain
-
-   QUALITY BAR:
-   ✓ Specific (numbers, timelines, named pressures)
-   ✓ Honest (don't sugarcoat vulnerabilities)
-   ✓ Evidence-based (cite sources for every claim)
-   ✓ Connected to the PERSON (not just company challenges)
-   ✗ Generic ("facing market challenges")
-   ✗ Safe ("well-positioned for growth")
-   ✗ Speculative psychology without direct quotes or evidence
-   ✗ Company challenges presented as personal vulnerabilities without connecting to the person
-
-3. STRATEGIC FOCUS (3-6 themes):
-   - Synthesized across multiple sources using cross-source pattern recognition
-   - Group by category with inline source citations
-   - Each theme gets a strategic_implication (5-10 word observational note)
-   - MUST use ONLY these category values:
-     GROWTH, MARKET, PRODUCT, CHALLENGE, TRACTION, BACKGROUND, TENSION
-   - Do NOT invent new category names
-
-4. QUOTES (3-5 direct quotes, 15-40 words each):
-   - DIRECT quotes only, no paraphrasing
-   - Topic label and source citation with timestamp
-   - Prefer quotes that reveal psychology, priorities, or pressure
-
-5. MOMENTUM GROUPED (organized by recency):
-   - Group into periods: "2025-Present", "2024", "Established Traction"
-   - Most recent first
-   - Include specific dates where possible
-
-6. SOURCES (all sources used):
-   - type: "primary" (person interviews) or "supporting" (company/press)
-   - icon: 🎧 for podcast, 📹 for video, 📄 for article
-   - Include title, platform, date, duration (video/podcast only), url""")
+    return "\n".join(lines)
 
     return "\n".join(lines)
 
@@ -1829,20 +1750,13 @@ SECTION RULES:
 # ═══════════════════════════════════════════════════════════
 
 def _build_dossier_system_low_signal(request: ResearchRequest) -> str:
-    """Build Dossier prompt for low-signal executives (no direct interviews)."""
+    """Build Deep Dive prompt for low-signal executives."""
     lines = [
-        "You are an EXECUTIVE INTELLIGENCE engine building a research dossier for B2B sales prep.",
+        "You are an EXECUTIVE INTELLIGENCE engine building a Deep Dive brief for B2B sales prep.",
         "",
-        "CRITICAL CONTEXT: Very limited direct public signal exists for this person.",
-        "There are NO direct interviews, podcast appearances, or keynotes indexed.",
-        "",
-        "YOUR APPROACH:",
-        "1. PERSON is always the primary subject — never let company context dominate",
-        "2. Use role/title to infer likely focus areas (clearly labeled)",
-        "3. Include company context ONLY as supporting evidence for the person's world",
-        "4. Be honest about confidence levels throughout",
-        "5. NEVER fabricate quotes or attribute statements to this person",
-        "6. NEVER speculate on personality or psychology without evidence",
+        "CRITICAL: Very limited direct public signal exists for this person.",
+        "Be honest about confidence levels. Label inferences clearly.",
+        "NEVER fabricate quotes or attribute statements to this person.",
         "",
         f"TARGET PERSON: {request.target_name}",
         f"TARGET COMPANY: {request.target_company}",
@@ -1851,102 +1765,41 @@ def _build_dossier_system_low_signal(request: ResearchRequest) -> str:
         lines.append(f"PERSON TITLE: {request.target_title}")
 
     lines.append("")
-    lines.append("""OUTPUT FORMAT (JSON object — LOW SIGNAL MODE):
+    lines.append("""OUTPUT FORMAT (JSON object with 4 sections — LOW SIGNAL):
+
 {
-  "pull_quote": null,
-  "background": [
-    "[Name] serves as [Title] at [Company]",
-    "[Any verified background facts from sources]",
-    "Role context: [What this title typically involves at a company like this]",
-    "Limited public executive content available — analysis primarily role-inferred"
+  "deep_pressure": [
+    {
+      "name": "Role-Inferred Pressure",
+      "description": "As [title] at [company], likely navigating [specific tension]. [ARTICLE N]",
+      "receptivity": "Likely more receptive to [approach] based on role context.",
+      "forward_facing": false,
+      "inferred": true
+    }
   ],
-  "executive_profile": {
-    "leadership_orientation": {
-      "growth_stage": "[Company]'s current phase: [what we know] — [person]'s role in this context",
-      "strategic_posture": "Inferred from role: [title] typically focuses on [likely priorities]",
-      "decision_making_bias": "Insufficient direct signal to assess individual decision-making patterns",
-      "strategic_implication": "Role suggests focus on [likely area] — requires validation"
-    },
-    "pressure_points": [
-      {
-        "name": "Role-Typical Pressure",
-        "why_it_matters": "[What someone in this role typically navigates]",
-        "evidence": "Inferred from role context and company positioning"
-      }
-    ]
+  "pattern_evidence": {
+    "thesis": "Sources present a consistent but narrow view — thesis support is partial.",
+    "quote_evidence": null,
+    "behavior_evidence": "Insufficient source coverage for behavior evidence.",
+    "company_evidence": "Company-level context suggests [pattern]. [ARTICLE N]"
   },
-  "strategic_focus": [
-    {
-      "category": "PRODUCT",
-      "title": "LIKELY FOCUS: [Area]",
-      "bullets": [
-        "As [title], likely responsible for [focus area] — [company context supports this]",
-        "[Another role-inferred focus with company evidence]"
-      ],
-      "strategic_implication": "Inferred — requires validation in conversation"
-    }
-  ],
-  "quotes": [],
-  "momentum_grouped": [
-    {
-      "period": "Company Context",
-      "bullets": [
-        "[Recent company developments that shape this person's operating environment]"
-      ]
-    }
-  ],
+  "in_their_own_words": {
+    "core": [],
+    "supporting": [],
+    "outlier": [],
+    "additional_count": 0,
+    "limited_coverage_note": "Limited direct quote coverage — signals in Quick Prep are partially inferred from context."
+  },
   "sources": [...]
 }
 
-═══════════════════════════════════════
-SECTION RULES (LOW SIGNAL MODE):
-═══════════════════════════════════════
+RULES:
+- Deep Pressure: 2-3 role-inferred pressures, all marked inferred: true
+- Pattern Evidence: be honest about gaps. Use null for missing evidence types.
+- In Their Own Words: return empty arrays if no direct quotes. Include limited_coverage_note.
+- Sources: mark all as "supporting" (no primary without direct interviews)""")
 
-1. BACKGROUND (max 6 bullets):
-   - LEAD with person's identity and role — this is about THEM
-   - Include any verified facts from sources (LinkedIn, press mentions, etc.)
-   - Add role context: what this title typically involves at a company like this
-   - Acknowledge signal limitations honestly
-   - NEVER pad with company history as if it's person background
-   - Career arc if available, otherwise: "Background details not publicly confirmed"
-
-2. EXECUTIVE PROFILE:
-
-   LEADERSHIP ORIENTATION:
-   - Frame around the person's role, not the company's strategy
-   - Label inferences clearly: "Inferred from role context"
-   - "Insufficient direct signal" is an acceptable and honest answer
-   - strategic_implication: always note inference needs validation
-
-   PRESSURE POINTS (2-3 role-inferred):
-   - Focus on role-typical pressures, not speculative personal ones
-   - Every point MUST be labeled: "Inferred from role context"
-   - Frame as: what someone in THIS role at THIS company likely navigates
-   - NEVER present company challenges as personal vulnerabilities
-   - NEVER speculate on psychology or decision patterns
-
-3. STRATEGIC FOCUS (3-4 themes):
-   - Title each as "LIKELY FOCUS: [Area]" to signal inference
-   - Frame around the person's role responsibilities
-   - Use company context as supporting evidence, not the headline
-   - strategic_implication: always note "Inferred — requires validation"
-   - MUST use ONLY these category values:
-     GROWTH, MARKET, PRODUCT, CHALLENGE, TRACTION, BACKGROUND, TENSION
-
-4. QUOTES:
-   - Return EMPTY array [] — do not fabricate quotes
-   - Being honest is better than fabricated content
-
-5. MOMENTUM GROUPED:
-   - Use "Company Context" as period label
-   - Include company developments that directly affect this person's role
-   - Frame as: developments shaping the person's operating environment
-   - Second group can be "Market Context" for competitive landscape
-
-6. SOURCES:
-   - List all sources used
-   - Mark ALL as "supporting" (none are "primary" without direct interviews)
-   - icon: 🎧 for podcasts, 📹 for videos, 📄 for articles""")
+    return "\n".join(lines)
 
     return "\n".join(lines)
 
@@ -2031,82 +1884,67 @@ def _build_signals(raw_signals: list) -> List[Signal]:
 
 
 def _build_dossier(raw: dict) -> FullDossier:
-    """Convert raw Gemini dossier JSON into a FullDossier object."""
-    background = DossierBackground(
-        bullets=[b for b in (raw.get("background") or []) if isinstance(b, str)][:6]
+    """Convert raw Gemini Deep Dive JSON into a FullDossier object."""
+    from models.responses import (
+        DeepPressurePoint, PatternEvidence, QuoteEvidence,
+        InTheirOwnWords, OwnWordsQuote, DossierSource,
     )
 
-    # Executive Profile
-    executive_profile = None
-    ep_raw = raw.get("executive_profile")
-    if isinstance(ep_raw, dict):
-        lo_raw = ep_raw.get("leadership_orientation") or {}
-        leadership_orientation = LeadershipOrientation(
-            growth_stage=lo_raw.get("growth_stage", ""),
-            strategic_posture=lo_raw.get("strategic_posture", ""),
-            decision_making_bias=lo_raw.get("decision_making_bias", ""),
-            strategic_implication=lo_raw.get("strategic_implication", ""),
+    # Deep Pressure
+    deep_pressure = []
+    for dp in (raw.get("deep_pressure") or [])[:3]:
+        if isinstance(dp, dict):
+            deep_pressure.append(DeepPressurePoint(
+                name=dp.get("name") or "",
+                description=dp.get("description") or "",
+                receptivity=dp.get("receptivity") or "",
+                forward_facing=bool(dp.get("forward_facing")),
+                inferred=bool(dp.get("inferred")),
+            ))
+
+    # Pattern Evidence
+    pattern_evidence = None
+    pe_raw = raw.get("pattern_evidence")
+    if isinstance(pe_raw, dict):
+        qe_raw = pe_raw.get("quote_evidence")
+        quote_ev = None
+        if isinstance(qe_raw, dict) and qe_raw.get("quote"):
+            quote_ev = QuoteEvidence(
+                quote=qe_raw.get("quote") or "",
+                source=qe_raw.get("source") or "",
+                source_url=qe_raw.get("source_url") or "",
+                why_strongest=qe_raw.get("why_strongest") or "",
+            )
+        pattern_evidence = PatternEvidence(
+            thesis=pe_raw.get("thesis") or "",
+            quote_evidence=quote_ev,
+            behavior_evidence=pe_raw.get("behavior_evidence") or "",
+            company_evidence=pe_raw.get("company_evidence") or "",
         )
-        pressure_points = []
-        for pp in (ep_raw.get("pressure_points") or [])[:4]:
-            if isinstance(pp, dict):
-                pressure_points.append(PressurePoint(
-                    name=pp.get("name", ""),
-                    why_it_matters=pp.get("why_it_matters", ""),
-                    evidence=pp.get("evidence", ""),
-                ))
-        executive_profile = ExecutiveProfile(
-            leadership_orientation=leadership_orientation,
-            pressure_points=pressure_points,
+
+    # In Their Own Words
+    in_their_own_words = None
+    itow_raw = raw.get("in_their_own_words")
+    if isinstance(itow_raw, dict):
+        def _parse_quotes(lst):
+            result = []
+            for q in (lst or []):
+                if isinstance(q, dict) and q.get("quote"):
+                    result.append(OwnWordsQuote(
+                        quote=q.get("quote") or "",
+                        source=q.get("source") or "",
+                        source_url=q.get("source_url") or "",
+                        insight=q.get("insight") or "",
+                    ))
+            return result
+
+        in_their_own_words = InTheirOwnWords(
+            core=_parse_quotes(itow_raw.get("core"))[:5],
+            supporting=_parse_quotes(itow_raw.get("supporting"))[:3],
+            outlier=_parse_quotes(itow_raw.get("outlier"))[:2],
+            additional_count=itow_raw.get("additional_count") or 0,
+            limited_coverage_note=itow_raw.get("limited_coverage_note") or "",
         )
-
-    # Strategic Focus (with strategic_implication)
-    themes = []
-    for t in (raw.get("strategic_focus") or [])[:6]:
-        if not isinstance(t, dict):
-            continue
-        category = (t.get("category") or "").upper()
-        # Deterministic icon: always use our mapping, never trust Gemini's icon
-        icon = CATEGORY_ICONS.get(category, "")
-        themes.append({
-            "category": category,
-            "icon": icon,
-            "title": t.get("title") or "",
-            "bullets": [b for b in (t.get("bullets") or []) if isinstance(b, str)],
-            "strategic_implication": t.get("strategic_implication", ""),
-        })
-    strategic_focus = DossierStrategicFocus(themes=themes)
-
-    # Quotes
-    quotes = []
-    for q in (raw.get("quotes") or [])[:5]:
-        if not isinstance(q, dict):
-            continue
-        quote_text = (q.get("quote") or "").strip()
-        if not quote_text:
-            continue
-        quotes.append(DossierQuote(
-            topic=q.get("topic") or "",
-            quote=quote_text,
-            source=q.get("source") or "",
-        ))
-
-    # Momentum (flat — backward compat)
-    momentum = DossierMomentum(
-        bullets=[b for b in (raw.get("momentum") or []) if isinstance(b, str)][:6]
-    )
-
-    # Momentum Grouped (new)
-    momentum_grouped = None
-    mg_raw = raw.get("momentum_grouped")
-    if isinstance(mg_raw, list) and len(mg_raw) > 0:
-        momentum_grouped = []
-        for group in mg_raw:
-            if isinstance(group, dict):
-                momentum_grouped.append(DossierMomentumGroup(
-                    period=group.get("period", ""),
-                    bullets=[b for b in (group.get("bullets") or []) if isinstance(b, str)],
-                ))
 
     # Sources
     sources = []
@@ -2115,21 +1953,20 @@ def _build_dossier(raw: dict) -> FullDossier:
             continue
         sources.append(DossierSource(
             type=s.get("type") or "supporting",
+            label=s.get("label") or "",
             icon=s.get("icon") or "",
             title=s.get("title") or "",
             platform=s.get("platform") or "",
             date=s.get("date") or "",
             duration=s.get("duration"),
             url=s.get("url") or "",
+            context_only=bool(s.get("context_only")),
         ))
 
     return FullDossier(
-        background=background,
-        executive_profile=executive_profile,
-        strategic_focus=strategic_focus,
-        quotes=quotes,
-        momentum=momentum,
-        momentum_grouped=momentum_grouped,
+        deep_pressure=deep_pressure,
+        pattern_evidence=pattern_evidence,
+        in_their_own_words=in_their_own_words,
         sources=sources,
     )
 
