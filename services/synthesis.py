@@ -894,7 +894,11 @@ Core Read must NOT repeat biographical context already stated in Executive Snaps
 It answers ONLY one question: what pattern emerges across all sources that wouldn't
 be visible from reading any single source alone?
 
-If Core Read and Executive Snapshot feel similar, they are bleeding into each other.
+If Core Read uses the same concepts, themes, or phrases as Executive Snapshot, REWRITE IT.
+Core Read must introduce a NEW observation not present in the Snapshot.
+Look for a cross-source TENSION (e.g. "publicly advocates X while simultaneously doing Y")
+rather than restating their philosophy.
+
 Core Read is the thesis only — no character description, no tactical direction.
 
 It must:
@@ -1389,6 +1393,10 @@ It must begin with: "Across interviews, public statements, and company actions, 
 Identify a specific tension, strategic posture, or recurring decision pattern
 visible in at least 2 distinct source types. Focus on behavior, not personality.
 1-2 sentences max.
+
+CRITICAL: Core Read must NOT use the same concepts or phrases as Executive Snapshot.
+It must introduce a NEW observation. Look for a cross-source TENSION
+(e.g. "publicly advocates X while simultaneously doing Y") rather than restating philosophy.
 
 If no genuine cross-source pattern exists, write:
 "Sources present a consistent but narrow view — signals below are directional rather than cross-validated."

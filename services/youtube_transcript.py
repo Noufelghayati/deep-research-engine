@@ -288,21 +288,37 @@ def _transcribe_with_gemini_sync(audio_path: Path, on_log=None) -> Optional[str]
             logger.info(f"Waiting for Gemini file processing... state={status.state.name}")
             _time.sleep(2)
 
-        # Transcribe
+        # Transcribe (with retry on 503)
         log("Transcribing audio with Gemini...")
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=[
-                uploaded_file,
-                "Transcribe this audio into English text. "
-                "Return ONLY the raw transcript — no timestamps, "
-                "no speaker labels, no formatting, no commentary.",
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=65536,
-            ),
-        )
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=[
+                        uploaded_file,
+                        "Transcribe this audio into English text. "
+                        "Return ONLY the raw transcript — no timestamps, "
+                        "no speaker labels, no formatting, no commentary.",
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        max_output_tokens=65536,
+                    ),
+                )
+                break  # success
+            except Exception as retry_err:
+                err_str = str(retry_err)
+                if ("503" in err_str or "UNAVAILABLE" in err_str) and attempt < 2:
+                    wait = (attempt + 1) * 3  # 3s, 6s
+                    log(f"Gemini 503 — retrying in {wait}s (attempt {attempt + 2}/3)...")
+                    logger.warning(f"Gemini transcription 503, retry {attempt + 1}/2 in {wait}s")
+                    _time.sleep(wait)
+                else:
+                    raise  # non-503 or final attempt — let outer handler catch it
+        if response is None:
+            log("Gemini transcription failed after retries")
+            return None
 
         text = response.text.strip() if response.text else None
 
