@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = "PLACEHOLDER_ANTHROPIC_KEY"
     claude_model: str = "claude-sonnet-4-6"
     claude_max_output_tokens: int = 64000
-    claude_temperature: float = 0.3
+    claude_temperature: float = 0.4
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

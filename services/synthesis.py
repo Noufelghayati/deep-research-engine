@@ -1793,8 +1793,6 @@ SECTION RULES:
 
     return "\n".join(lines)
 
-    return "\n".join(lines)
-
 
 # ═══════════════════════════════════════════════════════════
 #  CALL 2b: Full Dossier — LOW SIGNAL MODE
@@ -2453,23 +2451,32 @@ async def synthesize(
         except Exception as e:
             logger.error(f"Synthesis QP Sub C error: {e}")
 
-    # ── Dossier call (runs in parallel with all QP sub-calls) ──
-    async def _run_dossier():
-        return await loop.run_in_executor(
-            None, _call_claude_sync, dossier_system, dossier_content
-        )
-
-    # ── Launch all 4 calls in parallel ──
-    dossier_task = asyncio.create_task(_run_dossier())
+    # ── Launch QP sub-calls in parallel (dossier runs AFTER to receive pull quote) ──
     await asyncio.gather(_run_sub_a(), _run_sub_b(), _run_sub_c())
 
     # Give SSE time to flush QP partials before dossier follows
     if on_partial and (signals or executive_orientation):
         await asyncio.sleep(0.3)
 
-    # ── Await Full Dossier (may already be done) ──
+    # ── Inject Big Quote exclusion into dossier content ──
+    dossier_content_final = dossier_content
+    if qp_pull_quote and qp_pull_quote.get("quote"):
+        dossier_content_final += (
+            "\n\n══════════════════════════════════════\n"
+            "QUICK PREP BIG QUOTE (DO NOT REUSE):\n"
+            "══════════════════════════════════════\n"
+            f'"{qp_pull_quote["quote"]}"\n\n'
+            "This quote has already been featured as the Big Quote in Quick Prep. "
+            "Do NOT select it again in Pattern Evidence quote_evidence or "
+            "In Their Own Words sections. Choose different quotes."
+        )
+        logger.info(f"Injected pull quote exclusion into dossier prompt ({len(qp_pull_quote['quote'])} chars)")
+
+    # ── Run Full Dossier (Claude) ──
     try:
-        dossier_result = await dossier_task
+        dossier_result = await loop.run_in_executor(
+            None, _call_claude_sync, dossier_system, dossier_content_final
+        )
     except Exception as e:
         dossier_result = e
 
