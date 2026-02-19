@@ -26,10 +26,16 @@ class Settings(BaseSettings):
     max_podcast_artifacts: int = 2  # keep low; podcast transcription is slow
     max_podcast_audio_duration_sec: int = 1800  # 30 min cap per episode
 
-    # Gemini settings
+    # Gemini settings (kept for reference)
     gemini_model: str = "gemini-3-flash-preview"
     gemini_max_output_tokens: int = 65536
     gemini_temperature: float = 0.3
+
+    # Claude settings
+    anthropic_api_key: str = "PLACEHOLDER_ANTHROPIC_KEY"
+    claude_model: str = "claude-sonnet-4-6"
+    claude_max_output_tokens: int = 64000
+    claude_temperature: float = 0.3
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

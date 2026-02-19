@@ -1,3 +1,4 @@
+import anthropic
 from google import genai
 from google.genai import types
 from models.internal import CollectedArtifacts
@@ -29,7 +30,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key=settings.gemini_api_key)
+gemini_client = genai.Client(api_key=settings.gemini_api_key)
+claude_client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=600.0)
 
 CATEGORY_PRIORITY = ["GROWTH", "CHALLENGE", "MARKET", "PRODUCT", "TENSION", "TRACTION", "BACKGROUND"]
 
@@ -325,8 +327,8 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
 
 
 def _call_gemini_sync(system_prompt: str, content_prompt: str, thinking_budget: int = 4096) -> str:
-    """Synchronous Gemini call — run via executor for async compat."""
-    response = client.models.generate_content(
+    """Synchronous Gemini call — used for QP sub-calls (fast, parallel)."""
+    response = gemini_client.models.generate_content(
         model=settings.gemini_model,
         contents=content_prompt,
         config=types.GenerateContentConfig(
@@ -344,6 +346,23 @@ def _call_gemini_sync(system_prompt: str, content_prompt: str, thinking_budget: 
         logger.warning(f"Gemini non-STOP finish: {finish} — response may be truncated")
     return text
 
+
+def _call_claude_sync(system_prompt: str, content_prompt: str) -> str:
+    """Synchronous Claude call — used for final Dossier synthesis (high quality)."""
+    full_system = system_prompt + "\n\nIMPORTANT: Respond with ONLY the raw JSON object. No markdown, no code fences, no explanation."
+    response = claude_client.messages.create(
+        model=settings.claude_model,
+        max_tokens=settings.claude_max_output_tokens,
+        temperature=settings.claude_temperature,
+        system=full_system,
+        messages=[{"role": "user", "content": content_prompt}],
+    )
+    text = response.content[0].text
+    stop = response.stop_reason
+    logger.info(f"Claude response: {len(text)} chars, stop_reason={stop}")
+    if stop != "end_turn":
+        logger.warning(f"Claude non-end_turn stop: {stop} — response may be truncated")
+    return text
 
 def _parse_json_safe(raw: str):
     """Parse JSON from Gemini, handling common issues including truncation."""
@@ -2405,7 +2424,7 @@ async def synthesize(
     # ── Dossier call (runs in parallel with all QP sub-calls) ──
     async def _run_dossier():
         return await loop.run_in_executor(
-            None, _call_gemini_sync, dossier_system, dossier_content
+            None, _call_claude_sync, dossier_system, dossier_content
         )
 
     # ── Launch all 4 calls in parallel ──
