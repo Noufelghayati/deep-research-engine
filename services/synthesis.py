@@ -1781,6 +1781,8 @@ SECTION RULES:
    - outlier: quotes that complicate/contradict (max 2, omit if none)
    - Each: exact quote, source with date/timestamp, one insight line
    - NEVER summarize or paraphrase. Verbatim only.
+   - NEVER repeat the quote used in Pattern Evidence quote_evidence above.
+     Pick different quotes — the reader sees both sections side by side.
    - Skip generic business language unless contextually essential
    - If fewer than 4 quotes: add note about limited coverage
    - additional_count: number of extra quotes beyond displayed 10
@@ -1846,9 +1848,8 @@ RULES:
 - Deep Pressure: 2-3 role-inferred pressures, all marked inferred: true
 - Pattern Evidence: be honest about gaps. Use null for missing evidence types.
 - In Their Own Words: return empty arrays if no direct quotes. Include limited_coverage_note.
+  NEVER repeat the quote used in Pattern Evidence quote_evidence.
 - Sources: mark all as "supporting" (no primary without direct interviews)""")
-
-    return "\n".join(lines)
 
     return "\n".join(lines)
 

@@ -643,7 +643,9 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         on_partial=_on_partial if on_progress else None,
     )
 
-    # Attach warnings
+    # Attach warnings — suppress "Partial research" if we gathered enough sources
+    if total_sources >= 5:
+        warnings = [w for w in warnings if "Partial research" not in w]
     response.warnings = warnings
 
     signal_count = len(response.signals)
