@@ -736,7 +736,7 @@ their company shipped. Start with He/She, never the company name.
   WRONG: "NVIDIA is aggressively moving into the Software-as-a-Model space..."
   RIGHT: "He’s betting his next growth cycle on open-sourcing not just models but training data..."
 
-WORD LIMIT: Max 40 words per card. Cut filler, keep specifics.
+LENGTH LIMIT: Max 4 sentences per card. Cut filler, keep specifics.
 
 TACTICAL PRECISION: The so-what must be specific enough that it could ONLY apply
 to this person. "Position your offerings" = too generic, fails the test.
@@ -756,14 +756,15 @@ SIGNAL CATEGORIES (used for icon selection only, NOT shown in text):
 🚨 CHALLENGE — stated problems, pain points, risks
 
 REQUIRED COMPOSITION (5 signals, each a DIFFERENT category):
-- Each signal must address a different strategic dimension
-- NEVER repeat the same category
+- Each signal must use a DIFFERENT category icon/emoji
+- NEVER assign the same emoji to two cards — all 5 must be visually distinct
+- If you run out of strong signals for a category, pick the next best from an unused one
 
 CRITICAL RULES:
 1. Every signal must end with a tactical so-what for the AE
 2. Be specific with numbers, timelines, stakes
 3. Max 2-3 sentences per signal. Plain prose, no formulas.
-4. Each quote must be 15-40 words from source material
+4. Each signal: max 4 sentences. Each quote: 15-40 words from source material
 5. DEDUPLICATE: same fact from multiple sources = ONE signal citing best source
 6. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts
 7. Diversify source types across cards (podcast, video, article)""")
@@ -805,36 +806,37 @@ or null if no direct quotes available.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SNAPSHOT (2-3 sentences)
+PART 3: EXECUTIVE SNAPSHOT (2-3 sentences max)
 ═══════════════════════════════════════
 
-Based on everything gathered about this person, write a 2-3 sentence
-Executive Snapshot that answers three things in flowing prose — not
-as labeled sections:
+Write a 2-3 sentence Executive Snapshot. Maximum 2-3 sentences. No exceptions.
 
-1. What is this person reacting against or trying to prove based on
-   their career trajectory?
-2. What do they care about most in their current role based on how
-   they talk publicly?
-3. What does that mean tactically for how someone should sell to or
-   engage with them?
+Executive Snapshot must ONLY answer: who is this person and what drives them.
+It must NOT include:
+- Cross-source pattern analysis (that belongs in Core Read)
+- Tactical engagement advice (that belongs in Lead Orientation and Conversation Angles)
+- Selling direction or "how to pitch them" language
 
-Avoid generic descriptors like "passionate," "results-driven," or
-"customer-obsessed." Every sentence should contain information an AE
-couldn't get from reading the LinkedIn profile themselves. If you
-can't find enough signal to answer all three, say so — do not
-fabricate or generalize.
+If the output feels similar to Core Read, the sections are bleeding.
+Executive Snapshot is character context only — sharp, specific, and brief.
+
+Answer in flowing prose:
+1. What is this person reacting against or trying to prove?
+2. What do they care about most based on how they talk publicly?
+
+Avoid generic descriptors like "passionate" or "results-driven."
+Every sentence should contain information beyond their LinkedIn profile.
 
 Examples:
-✓ "Former CFO turned ecosystem builder — Adil thinks in systems and friction points, not features. He's been inside Rippling's operational engine long enough to have zero patience for tools that add complexity. Sell to the outcome he's accountable for: making founders operationally dangerous faster."
-✓ "Gia has lived through bad software migrations and built her entire philosophy around not repeating them. She'll evaluate you on how realistic and role-specific your implementation process is before she ever considers price. Come in with a clear onboarding story or don't come in at all."
-✓ "Creative director who's learned to speak in data to get what he wants — he bridges brand intuition with business rigor because he's had to. He's not a feelings-first creative, he's a systems thinker in a creative's clothing. Pitch him on outcomes and craft simultaneously or you'll lose him on one dimension."
+✓ "Former CFO turned ecosystem builder — Adil thinks in systems and friction points, not features. He's been inside Rippling's operational engine long enough to have zero patience for tools that add complexity."
+✓ "Gia has lived through bad software migrations and built her entire philosophy around not repeating them. She evaluates everything through the lens of implementation reality, not capability promise."
 
 RULES:
-- 2-3 sentences, flowing prose
+- 2-3 sentences MAXIMUM, flowing prose
 - Skip the person's name (it's already shown above)
-- Must reveal HOW to engage, not just WHO they are
-- Every sentence must contain signal beyond their LinkedIn profile
+- Character context only — who they are and what drives them
+- NO tactical engagement advice (that goes in Orientation / Conversation Angles)
+- NO cross-source pattern analysis (that goes in Core Read)
 - Do NOT repeat orientation lines verbatim
 - If insufficient signal, explicitly flag it rather than fabricating""")
 
@@ -853,8 +855,10 @@ that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d,
 
 For each recent move, do four things:
 1. Label the signal tier:
-   - [THEIR WORDS]: They authored it, appeared in it, or were directly quoted
-   - [THEIR ATTENTION]: They shared, commented on, or engaged with it on LinkedIn
+   - [THEIR WORDS]: They authored it, appeared in it, spoke at it, or were directly quoted
+     (includes: podcast guest, conference speaker, interview subject, panel participant)
+   - [THEIR ATTENTION]: They shared, commented on, or engaged with someone ELSE's content on LinkedIn
+     (NEVER use THEIR ATTENTION for content where the person is the speaker or subject)
    - [COMPANY NEWS]: Organizational announcement, funding, press coverage about their company
    NEVER present a [THEIR ATTENTION] signal as if it were [THEIR WORDS].
 
@@ -886,6 +890,13 @@ CORE READ (thesis statement)
 Generate one Core Read statement for this person.
 This appears between Recent Moves and Lead Orientation and serves as the thesis.
 
+Core Read must NOT repeat biographical context already stated in Executive Snapshot.
+It answers ONLY one question: what pattern emerges across all sources that wouldn't
+be visible from reading any single source alone?
+
+If Core Read and Executive Snapshot feel similar, they are bleeding into each other.
+Core Read is the thesis only — no character description, no tactical direction.
+
 It must:
 1. Begin with: "Across interviews, public statements, and company actions, a consistent pattern emerges:"
 2. Identify a specific, evidence-backed tension, strategic posture, or recurring
@@ -893,6 +904,7 @@ It must:
 3. Focus on behavior and strategic posture — not personality speculation.
 4. Avoid psychological interpretation unless directly supported by quotes or actions.
 5. Be one to two sentences maximum.
+6. NEVER restate who the person is or what their role is — the reader already knows.
 
 If no genuine cross-source pattern exists, write:
 "Sources present a consistent but narrow view — signals below are directional rather than cross-validated."
@@ -1224,39 +1236,41 @@ def _build_qp_sub_a_system(
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences — LOW SIGNAL)
+TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences max — LOW SIGNAL)
 ═══════════════════════════════════════
 
-Based on whatever limited information is available, write a 2-3 sentence
-Executive Snapshot answering in flowing prose:
+Write a 2-3 sentence Executive Snapshot. Maximum 2-3 sentences. No exceptions.
+
+Answer in flowing prose — character context only:
 1. What can we infer about their career trajectory?
 2. What do they likely care about based on role and company context?
-3. What does that mean tactically for how to engage them?
 
+Do NOT include tactical engagement advice or cross-source patterns.
 Acknowledge limited signal honestly. Do NOT fabricate or generalize.
 
 RULES:
-- 2-3 sentences, flowing prose
-- Acknowledge limited signal where applicable
-- If insufficient signal, explicitly flag it""")
+- 2-3 sentences MAXIMUM, flowing prose
+- Character context only — no tactical advice
+- Acknowledge limited signal where applicable""")
     else:
         lines.append("""═══════════════════════════════════════
-TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences)
+TASK 1: EXECUTIVE SNAPSHOT (2-3 sentences max)
 ═══════════════════════════════════════
 
-Based on everything gathered, write a 2-3 sentence Executive Snapshot
-answering in flowing prose — not as labeled sections:
+Write a 2-3 sentence Executive Snapshot. Maximum 2-3 sentences. No exceptions.
+
+Executive Snapshot must ONLY answer: who is this person and what drives them.
+It must NOT include cross-source pattern analysis (Core Read) or tactical
+engagement advice (Lead Orientation / Conversation Angles).
+
+Answer in flowing prose:
 1. What is this person reacting against or trying to prove?
 2. What do they care about most based on how they talk publicly?
-3. What does that mean tactically for how to sell to or engage them?
-
-Avoid generic descriptors like "passionate" or "results-driven."
-Every sentence should contain information beyond their LinkedIn profile.
-If insufficient signal, say so — do not fabricate.
 
 RULES:
-- 2-3 sentences, flowing prose
-- Must reveal HOW to engage, not just WHO they are
+- 2-3 sentences MAXIMUM, flowing prose
+- Character context only — who they are and what drives them
+- NO tactical advice, NO cross-source patterns
 - Do NOT repeat orientation lines verbatim""")
 
     today = datetime.utcnow()
@@ -1272,7 +1286,7 @@ CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
 Identify up to 4 recent activities BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
 For each, include:
-- tier: THEIR WORDS / THEIR ATTENTION / COMPANY NEWS
+- tier: THEIR WORDS (they authored/spoke/appeared) / THEIR ATTENTION (shared/engaged with others' content) / COMPANY NEWS
 - event: what happened (1 line)
 - date: Month Year
 - signal: what this tells you about what's top of mind (1 sentence)
@@ -1432,8 +1446,9 @@ PART 2: INTEL (5 cards — LOW SIGNAL)
 With limited signal, generate 5 Intel cards. Lead with the person (start
 every card with He/She, never the company name), connect role context to
 likely challenges, end each with a person-specific tactical so-what.
-Label inferences clearly. Max 40 words per card, plain prose.
+Label inferences clearly. Max 4 sentences per card, plain prose.
 Rank by tactical value. HARD RULE: No more than 2 cards from the same source type.
+REQUIRED: Each card must use a DIFFERENT category icon — never repeat the same emoji.
 Generic so-whats like "position your solution" fail — be specific to this person.
 CARD 1 ANCHOR RULE: Card 1 must be the strongest signal available, even with limited data.
 Prefer a direct quote or observable behavior over role-inferred context.
@@ -1483,12 +1498,16 @@ SIGNAL CATEGORIES (for icon selection only):
 ⚖️ TENSION — strategic trade-offs
 🚨 CHALLENGE — stated problems, pain points
 
+REQUIRED COMPOSITION: Each of the 5 cards must use a DIFFERENT category icon.
+NEVER assign the same emoji/category to two cards. If you run out of strong
+signals for a category, pick the next best from an unused category.
+
 RULES:
-1. Each signal: 2-3 sentences, plain prose, ends with AE tactical implication
-2. Be specific with numbers, timelines, stakes
-3. Each quote: 15-40 words from source material
-4. DEDUPLICATE: same fact from multiple sources = ONE signal
-5. Include source title, URL, date, timestamp for videos/podcasts
+1. Each signal: 2-4 sentences MAX, plain prose, ends with AE tactical implication
+2. If an insight requires more than 4 sentences, split into two cards or trim
+3. Be specific with numbers, timelines, stakes
+4. Each quote: 15-40 words from source material
+5. DEDUPLICATE: same fact from multiple sources = ONE signal
 6. Include source title, URL, date, and timestamp (MM:SS) for videos/podcasts.""")
 
     # ── PART 3: Opening Moves ──
@@ -1533,7 +1552,7 @@ RULES:
 OUTPUT FORMAT (JSON object):
 ═══════════════════════════════════════
 {
-  "core_read": "Across interviews, public statements, and company actions, a consistent pattern emerges: [specific cross-source pattern].",
+  "core_read": "Across interviews, public statements, and company actions, a consistent pattern emerges: [cross-source pattern that wouldn't be visible from any single source alone — NOT a restatement of the Executive Snapshot].",
   "executive_orientation": {
     "key_pressure": "She's managing the psychological weight of asking studio owners to abandon a decade of Mindbody data — her entire sales motion is built around not traumatizing the customer. If your implementation story is even slightly unclear she'll walk.",
     "bullets": [
