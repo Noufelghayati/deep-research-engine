@@ -1029,14 +1029,15 @@ def _build_quick_prep_system_low_signal(request: ResearchRequest) -> str:
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions — LOW SIGNAL MODE)
+PART 1: LEAD ORIENTATION (Key Pressure + up to 3 dimensions — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
 FIRST, write the Key Pressure — the most likely structural tension this person is
 navigating based on role and company context. Acknowledge limited signal honestly.
 2 sentences maximum.
 
-THEN, write up to 5 Lead Orientation dimensions with honest role-based inference.
+THEN, write up to 3 Lead Orientation dimensions with honest role-based inference.
+With limited signal, fewer high-quality bullets are better than 5 speculative ones.
 Each dimension should:
 1. Open with the implication for an AE — what this means for how you sell
 2. Support with whatever evidence is available, labeling inferences clearly
@@ -1065,7 +1066,7 @@ With limited person-level content, generate 5 Intel cards that:
 Frame EVERY signal around the person, even when using company data.
 Start every card with He/She, never the company name.
 
-WORD LIMIT: Max 40 words per card. Plain prose, no filler.
+LENGTH LIMIT: Max 4 sentences per card. Plain prose, no filler.
 HARD RULE: No more than 2 cards from the same source type.
 TACTICAL PRECISION: Each so-what must be specific to THIS person —
 generic advice like "position your solution" fails the test.
@@ -1085,29 +1086,33 @@ SIGNAL CATEGORIES (for icon selection only):
 
 For quote field: use a relevant company quote if available, or write:
   "No direct quote available — inferred from role context"
-For inferred signals, set source type to "article" and use the most relevant company source.""")
+
+SOURCE HONESTY: Do NOT fabricate source URLs, titles, or dates for inferred signals.
+For inferred signals:
+- source_type: "ROLE_INFERENCE"
+- source_title: "Role inference"
+- source_url: ""
+- source_date: ""
+Only use real source URLs/titles when you have actual source material.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
-PART 3: EXECUTIVE SNAPSHOT (2-3 sentences — LOW SIGNAL MODE)
+PART 3: EXECUTIVE SNAPSHOT (2-3 sentences max — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
-Based on whatever limited information is available, write a 2-3 sentence
-Executive Snapshot that answers in flowing prose:
+Write a 2-3 sentence Executive Snapshot. Maximum 2-3 sentences. No exceptions.
 
-1. What can we infer this person is reacting against or trying to prove
-   based on their career trajectory?
-2. What do they likely care about most based on their role and company context?
-3. What does that mean tactically for how someone should approach them?
+Answer in flowing prose — character context only:
+1. What can we infer about their career trajectory?
+2. What do they likely care about based on role and company context?
 
-If you can't find enough signal to answer all three confidently, say so —
-do not fabricate or generalize. Acknowledge limited signal honestly.
+Do NOT include tactical engagement advice or cross-source patterns.
+Acknowledge limited signal honestly. Do NOT fabricate or generalize.
 
 RULES:
-- 2-3 sentences, flowing prose
-- Acknowledge limited signal where applicable
-- Do NOT speculate beyond what sources support
-- If insufficient signal, explicitly flag it rather than fabricating""")
+- 2-3 sentences MAXIMUM, flowing prose
+- Character context only — no tactical advice
+- Acknowledge limited signal where applicable""")
 
     today_ls = datetime.utcnow()
     cutoff_ls = today_ls - timedelta(days=90)
@@ -1393,14 +1398,14 @@ If no genuine cross-source pattern exists, write:
     lines.append("")
     if low_signal:
         lines.append("""═══════════════════════════════════════
-PART 1: LEAD ORIENTATION (Key Pressure + 5 dimensions — LOW SIGNAL)
+PART 1: LEAD ORIENTATION (Key Pressure + up to 3 dimensions — LOW SIGNAL)
 ═══════════════════════════════════════
 
 FIRST, write the Key Pressure — most likely structural tension based on role context.
 2 sentences max. Acknowledge limited signal.
 
-THEN, write up to 5 orientation dimensions. Each: AE implication first, evidence second,
-2 sentences max, no labels/headers. Acknowledge limited signal where appropriate.
+THEN, write up to 3 orientation dimensions. Each: AE implication first, evidence second,
+2 sentences max, no labels/headers. Fewer strong bullets beat 5 speculative ones.
 
 REJECTION FRAME: If evidence supports it, one dimension should describe what this
 person is likely to reject or dismiss. Written as "He'll reject…" / "She has no
@@ -1522,7 +1527,7 @@ Frame as genuine discovery approaches. Each angle must use a DIFFERENT conversat
 approach — not just a different topic. Never use the same sentence structure twice.
 
 RULES:
-- 1-2 sentences per angle, natural prose
+- Max 25 words per angle — give direction, not a script
 - Each angle uses a different conversational mode
 - Reference company context the person operates in""")
     else:
@@ -1542,7 +1547,7 @@ CRITICAL: Never use the same sentence structure twice. The formula
 "Reference X — ask how Y" can be used ONCE maximum.
 
 RULES:
-- 1-2 sentences per angle, natural prose
+- Max 25 words per angle — give direction, not a script
 - Each angle uses a different conversational mode
 - Reference specific facts/signals from the research
 - The primary angle must be the single strongest opener""")
