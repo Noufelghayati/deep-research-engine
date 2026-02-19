@@ -1465,7 +1465,15 @@ SIGNAL CATEGORIES (for icon selection only):
 🔧 PRODUCT — likely operational focus
 💰 MARKET — market context
 🚨 CHALLENGE — role-typical pressures
-⚖️ TENSION — likely trade-offs""")
+⚖️ TENSION — likely trade-offs
+
+SOURCE HONESTY: Do NOT fabricate source URLs, titles, or dates for inferred signals.
+For inferred signals:
+- source_type: "ROLE_INFERENCE"
+- source_title: "Role inference"
+- source_url: ""
+- source_date: ""
+Only use real source URLs/titles when you have actual source material.""")
     else:
         lines.append("""═══════════════════════════════════════
 PART 2: INTEL (5 cards, ranked by tactical value)
@@ -1479,7 +1487,7 @@ Generate 5 Intel cards. Each card:
 
 NEVER use "reveals" more than once across all 5 cards.
 
-Start every card with He/She, never the company name. Max 40 words per card.
+Start every card with He/She, never the company name. Max 4 sentences per card.
 Generic so-whats like "position your offerings" fail — make it specific to
 this person's psychology and situation.
 CARD 1 ANCHOR RULE: Card 1 must be the strongest available tactical signal.
