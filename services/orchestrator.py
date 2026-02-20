@@ -666,6 +666,9 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     artifacts.steps_attempted.append("synthesis")
 
     async def _on_partial(section, data):
+        # Enforce pull quote lock in final synthesis partials too
+        if _locked_pull_quote and isinstance(data, dict):
+            data["pull_quote"] = _locked_pull_quote
         await emit("partial", section=section, data=data)
 
     response = await synthesize(
@@ -673,7 +676,12 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         request,
         has_person_content=has_person_content,
         on_partial=_on_partial if on_progress else None,
+        locked_pull_quote=_locked_pull_quote,
     )
+
+    # Enforce pull quote lock on final response
+    if _locked_pull_quote:
+        response.pull_quote = _locked_pull_quote
 
     # Attach warnings — suppress "Partial research" if we gathered enough sources
     if total_sources >= 5:

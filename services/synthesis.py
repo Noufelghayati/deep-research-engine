@@ -2322,6 +2322,7 @@ async def synthesize(
     request: ResearchRequest,
     has_person_content: bool = True,
     on_partial=None,
+    locked_pull_quote: Optional[dict] = None,
 ) -> ResearchResponse:
     """
     Multi-pass Gemini synthesis with progressive streaming:
@@ -2363,7 +2364,7 @@ async def synthesize(
     core_read = ""
     executive_summary = None
     opening_moves = []
-    qp_pull_quote = None
+    qp_pull_quote = locked_pull_quote  # Preserve locked quote from incremental QP
     recent_moves = []
     sources_info = {
         "podcasts": len(artifacts.podcasts),
@@ -2519,6 +2520,9 @@ async def synthesize(
     # ── QP Sub C: Pull Quote (fast, skipped in low-signal mode) ──
     async def _run_sub_c():
         nonlocal qp_pull_quote
+        if locked_pull_quote:
+            logger.info("Synthesis QP Sub C: skipping — pull quote locked from incremental QP")
+            return
         if low_signal:
             return
         try:
