@@ -41,25 +41,29 @@ CATEGORY_PRIORITY = ["GROWTH", "CHALLENGE", "MARKET", "PRODUCT", "TENSION", "TRA
 # ═══════════════════════════════════════════════════════════
 
 def _is_within_90_days(date_str: str) -> bool:
-    """Check if a date string like 'January 2026' or 'March 2025' is within 90 days of now."""
+    """Check if a date string like 'January 2026' or 'March 2025' is within ~4 months of now."""
     if not date_str:
         return False
+    import calendar as _cal
     # Common formats: "January 2026", "Jan 2026", "2026-01-15", "Q1 2026"
     today = datetime.utcnow()
-    cutoff = today - timedelta(days=90)
+    # 120-day window — generous for month-only dates where we don't know the exact day
+    cutoff = today - timedelta(days=120)
     try:
         # Try "Month Year" format
         for fmt in ("%B %Y", "%b %Y", "%Y-%m-%d", "%B %d, %Y"):
             try:
                 dt = datetime.strptime(date_str.strip(), fmt)
-                # For month-only formats, use the 1st of the month
+                # For month-only formats, use end of month (generous)
+                if fmt in ("%B %Y", "%b %Y"):
+                    last_day = _cal.monthrange(dt.year, dt.month)[1]
+                    dt = dt.replace(day=last_day)
                 return dt >= cutoff
             except ValueError:
                 continue
         # Try extracting year and month from freeform text
-        import calendar
-        months = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
-        months.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})
+        months = {m.lower(): i for i, m in enumerate(_cal.month_name) if m}
+        months.update({m.lower(): i for i, m in enumerate(_cal.month_abbr) if m})
         date_lower = date_str.lower()
         year = None
         month = None
@@ -69,7 +73,8 @@ def _is_within_90_days(date_str: str) -> bool:
             elif word.isdigit() and len(word) == 4:
                 year = int(word)
         if year and month:
-            dt = datetime(year, month, 1)
+            last_day = _cal.monthrange(year, month)[1]
+            dt = datetime(year, month, last_day)
             return dt >= cutoff
     except Exception:
         pass
@@ -887,14 +892,14 @@ RULES:
 - If insufficient signal, explicitly flag it rather than fabricating""")
 
     today = datetime.utcnow()
-    cutoff = today - timedelta(days=90)
+    cutoff = today - timedelta(days=120)
     lines.append("")
     lines.append(f"""═══════════════════════════════════════
-PART 4: RECENT MOVES (last 90 days, max 4 events)
+PART 4: RECENT MOVES (last 4 months, max 4 events)
 ═══════════════════════════════════════
 
 TODAY'S DATE: {today.strftime('%B %d, %Y')}
-CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
+CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (120 days ago)
 
 Identify up to 4 recent activities involving this person or their company
 that occurred BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
@@ -922,7 +927,7 @@ Examples:
 
 RULES:
 - ONLY include events dated AFTER {cutoff.strftime('%B %d, %Y')} — reject anything older
-- If no events from the last 90 days exist in sources, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
+- If no events from the last 4 months exist in sources, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
 - Never fabricate dates or events
 - Signal and hook must be 1 sentence each
 - Tier must be exactly one of: THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, NONE
@@ -1171,10 +1176,10 @@ RULES:
 - Acknowledge limited signal where applicable""")
 
     today_ls = datetime.utcnow()
-    cutoff_ls = today_ls - timedelta(days=90)
+    cutoff_ls = today_ls - timedelta(days=120)
     lines.append("")
     lines.append(f"""═══════════════════════════════════════
-PART 4: RECENT MOVES (last 90 days — LOW SIGNAL MODE)
+PART 4: RECENT MOVES (last 4 months — LOW SIGNAL MODE)
 ═══════════════════════════════════════
 
 TODAY'S DATE: {today_ls.strftime('%B %d, %Y')}
@@ -1341,14 +1346,14 @@ RULES:
 - Do NOT repeat orientation lines verbatim""")
 
     today = datetime.utcnow()
-    cutoff = today - timedelta(days=90)
+    cutoff = today - timedelta(days=120)
     lines.append("")
     lines.append(f"""═══════════════════════════════════════
-TASK 2: RECENT MOVES (last 90 days, max 4 events)
+TASK 2: RECENT MOVES (last 4 months, max 4 events)
 ═══════════════════════════════════════
 
 TODAY'S DATE: {today.strftime('%B %d, %Y')}
-CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (90 days ago)
+CUTOFF DATE: {cutoff.strftime('%B %d, %Y')} (120 days ago)
 
 Identify up to 4 recent activities BETWEEN {cutoff.strftime('%B %d, %Y')} and {today.strftime('%B %d, %Y')}.
 
