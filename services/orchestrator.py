@@ -373,6 +373,24 @@ def _build_source_list(artifacts):
             "date": p.published_at or "",
         })
     for v in artifacts.videos:
+        # Relevance gate: only surface videos we're confident are about this person.
+        # Require person's full name OR company name in the video title.
+        title_lower = (v.title or "").lower()
+        person_ok = False
+        if artifacts.person_name:
+            full = artifacts.person_name.lower()
+            parts = full.split()
+            # Full name match OR (first + last both present)
+            if full in title_lower:
+                person_ok = True
+            elif len(parts) >= 2 and parts[0] in title_lower and parts[-1] in title_lower:
+                person_ok = True
+        company_ok = (
+            artifacts.company_name
+            and artifacts.company_name.lower() in title_lower
+        )
+        if not person_ok and not company_ok:
+            continue  # irrelevant video — don't show in Sources
         src_num += 1
         source_list.append({
             "number": src_num, "type": "video",

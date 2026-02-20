@@ -879,7 +879,13 @@ RULES:
 - If no events from the last 90 days exist in sources, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
 - Never fabricate dates or events
 - Signal and hook must be 1 sentence each
-- Tier must be exactly one of: THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, NONE""")
+- Tier must be exactly one of: THEIR WORDS, THEIR ATTENTION, COMPANY NEWS, NONE
+
+IDENTITY VERIFICATION — CRITICAL:
+Only include events where the person is CLEARLY the target: {request.target_name or 'N/A'} at {request.target_company}.
+If an article mentions someone with the same or similar name but in a DIFFERENT company,
+role, or industry context, EXCLUDE it. A name match alone is NOT sufficient —
+the event must connect to the target's company, role, or professional domain.""")
 
     lines.append("")
     lines.append("""
@@ -1132,7 +1138,13 @@ Same rules as standard mode. Up to 4 events AFTER {cutoff_ls.strftime('%B %d, %Y
 Each move must include: tier (THEIR WORDS / THEIR ATTENTION / COMPANY NEWS), event, date,
 signal (what's top of mind), hook (how AE references it naturally).
 If no events exist, return: [{{"tier": "NONE", "event": "No recent public activity found — rely on company-level signals instead", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
-Never fabricate dates or events.""")
+Never fabricate dates or events.
+
+IDENTITY VERIFICATION — CRITICAL:
+Only include events where the person is CLEARLY the target: {request.target_name or 'N/A'} at {request.target_company}.
+If an article mentions someone with the same or similar name but in a DIFFERENT company,
+role, or industry context, EXCLUDE it. A name match alone is NOT sufficient —
+the event must connect to the target's company, role, or professional domain.""")
 
     lines.append("")
     lines.append("""
@@ -1303,7 +1315,13 @@ For each, include:
 - source_url and source_title
 
 If no events, return: [{{"tier": "NONE", "event": "No recent public activity found", "date": "", "signal": "", "hook": "", "source_url": "", "source_title": ""}}]
-Never fabricate dates or events.""")
+Never fabricate dates or events.
+
+IDENTITY VERIFICATION — CRITICAL:
+Only include events where the person is CLEARLY the target: {request.target_name or 'N/A'} at {request.target_company}.
+If an article mentions someone with the same or similar name but in a DIFFERENT company,
+role, or industry context, EXCLUDE it. A name match alone is NOT sufficient —
+the event must connect to the target's company, role, or professional domain.""")
 
     lines.append("")
     lines.append("""═══════════════════════════════════════
