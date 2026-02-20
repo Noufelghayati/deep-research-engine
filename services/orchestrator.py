@@ -454,7 +454,7 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
         _qp_needs_rerun = False
 
         async def _do_qp():
-            nonlocal _qp_task, _qp_needs_rerun
+            nonlocal _qp_task, _qp_needs_rerun, _locked_pull_quote
             try:
                 # Emit updated source list for citation linking
                 sl = _build_source_list(artifacts)
