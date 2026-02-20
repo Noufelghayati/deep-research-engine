@@ -551,7 +551,7 @@ def _compute_research_confidence(
     if len(artifacts.articles) > 0:
         reasons.append(f"{len(artifacts.articles)} article{'s' if len(artifacts.articles) != 1 else ''} analyzed")
 
-    if direct_interviews >= 3 and recent_count >= 1:
+    if (direct_interviews >= 2 and total_sources >= 8) or (direct_interviews >= 3 and recent_count >= 1):
         return ResearchConfidence(
             level="high",
             label=f"{direct_interviews} direct interviews with recent coverage",
@@ -1789,8 +1789,16 @@ SECTION RULES:
    - outlier: quotes that complicate/contradict (max 2, omit if none)
    - Each: exact quote, source with date/timestamp, one insight line
    - NEVER summarize or paraphrase. Verbatim only.
-   - NEVER repeat the quote used in Pattern Evidence quote_evidence above.
-     Pick different quotes — the reader sees both sections side by side.
+   - ABSOLUTE RULE — QUOTE DEDUPLICATION:
+     The quote used in Pattern Evidence quote_evidence MUST NOT appear anywhere
+     in this section — not in core, supporting, or outlier. The reader sees
+     Pattern Evidence and In Their Own Words side by side. Any repeated quote
+     is immediately visible and destroys credibility. Select DIFFERENT quotes.
+   - If fewer than 3 distinct, high-quality quotes exist across all sources,
+     do NOT repeat or stretch quotes already used in Pattern Evidence to fill
+     this section. Instead set limited_coverage_note to:
+     "Insufficient additional quotes available — primary source material shown
+     in Pattern Evidence." Never pad this section with weak or repeated quotes.
    - Skip generic business language unless contextually essential
    - If fewer than 4 quotes: add note about limited coverage
    - additional_count: number of extra quotes beyond displayed 10
@@ -1856,7 +1864,10 @@ RULES:
 - Deep Pressure: 2-3 role-inferred pressures, all marked inferred: true
 - Pattern Evidence: be honest about gaps. Use null for missing evidence types.
 - In Their Own Words: return empty arrays if no direct quotes. Include limited_coverage_note.
-  NEVER repeat the quote used in Pattern Evidence quote_evidence.
+  ABSOLUTE RULE: The quote used in Pattern Evidence quote_evidence MUST NOT appear
+  anywhere in this section. The reader sees both sections side by side.
+  If fewer than 3 distinct quotes exist, do NOT pad — set limited_coverage_note to
+  "Insufficient additional quotes available — primary source material shown in Pattern Evidence."
 - Sources: mark all as "supporting" (no primary without direct interviews)""")
 
     return "\n".join(lines)

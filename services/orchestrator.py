@@ -424,9 +424,10 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
     _qp_task = None
     _qp_src_count = 0
     _qp_needs_rerun = False
+    _locked_pull_quote = None  # once a pull quote is selected, lock it across passes
 
     async def _fire_incremental_qp():
-        nonlocal _qp_task, _qp_src_count, _qp_needs_rerun
+        nonlocal _qp_task, _qp_src_count, _qp_needs_rerun, _locked_pull_quote
 
         current = len(artifacts.podcasts) + len(artifacts.videos) + len(artifacts.articles)
         if current == 0:
@@ -467,6 +468,13 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
                 has_person = pvc > 0 or ppc > 0
 
                 async def _on_section(partial_data):
+                    nonlocal _locked_pull_quote
+                    # Lock pull quote: once selected, preserve across passes
+                    if _locked_pull_quote:
+                        partial_data["pull_quote"] = _locked_pull_quote
+                    elif partial_data.get("pull_quote"):
+                        _locked_pull_quote = partial_data["pull_quote"]
+                        logger.info("Pull quote locked for session")
                     await emit("partial", section="quick_prep", data=partial_data)
 
                 result = await run_quick_prep_only(
@@ -474,6 +482,12 @@ async def run_research(request: ResearchRequest, on_progress=None) -> ResearchRe
                     on_section=_on_section,
                 )
                 if result:
+                    # Lock pull quote from final result too
+                    if _locked_pull_quote:
+                        result["pull_quote"] = _locked_pull_quote
+                    elif result.get("pull_quote"):
+                        _locked_pull_quote = result["pull_quote"]
+                        logger.info("Pull quote locked for session")
                     # Final emission with all sections merged
                     await emit("partial", section="quick_prep", data=result)
                     logger.info(f"Incremental QP emitted ({_qp_src_count} sources)")
