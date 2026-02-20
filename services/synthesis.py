@@ -326,6 +326,52 @@ def _build_source_material(artifacts: CollectedArtifacts) -> str:
     return "\n\n".join(sections)
 
 
+def _build_transcript_only_material(artifacts: CollectedArtifacts) -> str:
+    """Build source material with ONLY podcast/video transcripts (no articles).
+    Used by Sub C (pull quote) so Gemini can't accidentally pick article text."""
+    sections = []
+    source_num = 0
+
+    for podcast in artifacts.podcasts:
+        if not podcast.transcript_text:
+            continue
+        source_num += 1
+        section = f"=== SOURCE {source_num}: Podcast Episode ===\n"
+        section += f"Title: {podcast.title}\n"
+        if podcast.podcast_title:
+            section += f"Podcast: {podcast.podcast_title}\n"
+        section += f"URL: {podcast.url}\n"
+        if podcast.published_at:
+            section += f"Published: {podcast.published_at}\n"
+        if podcast.is_person_match:
+            section += "Match type: PERSON-LEVEL (features the target person)\n"
+        else:
+            section += "Match type: COMPANY-LEVEL (features company leadership)\n"
+        section += f"Transcript:\n{podcast.transcript_text}\n"
+        sections.append(section)
+
+    for video in artifacts.videos:
+        if not video.transcript_text:
+            continue
+        source_num += 1
+        section = f"=== SOURCE {source_num}: YouTube Video ===\n"
+        section += f"Title: {video.title}\n"
+        section += f"Channel: {video.channel_title}\n"
+        section += f"URL: {video.url}\n"
+        section += f"Published: {video.published_at}\n"
+        if video.is_person_match:
+            section += "Match type: PERSON-LEVEL (features the target person)\n"
+        else:
+            section += "Match type: COMPANY-LEVEL (features company leadership)\n"
+        section += f"Transcript:\n{video.transcript_text}\n"
+        sections.append(section)
+
+    if not sections:
+        return ""
+
+    return "\n\n".join(sections)
+
+
 def _call_gemini_sync(system_prompt: str, content_prompt: str, thinking_budget: int = 4096) -> str:
     """Synchronous Gemini call — used for QP sub-calls (fast, parallel)."""
     response = gemini_client.models.generate_content(
@@ -2234,8 +2280,13 @@ async def run_quick_prep_only(
             return  # No transcripts to quote from
         try:
             sys_c = _build_qp_sub_c_system(request)
+            # Feed ONLY transcript content so Gemini can't pick article text
+            transcript_content = _build_transcript_only_material(artifacts)
+            if not transcript_content:
+                logger.info("QP Sub C: no transcripts available, skipping")
+                return
             raw = await loop.run_in_executor(
-                None, _call_gemini_sync, sys_c, content, 1024
+                None, _call_gemini_sync, sys_c, transcript_content, 1024
             )
             parsed = _parse_json_safe(raw.strip())
             if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
@@ -2472,8 +2523,13 @@ async def synthesize(
             return
         try:
             sys_c = _build_qp_sub_c_system(request)
+            # Feed ONLY transcript content so Gemini can't pick article text
+            transcript_content = _build_transcript_only_material(artifacts)
+            if not transcript_content:
+                logger.info("Synthesis QP Sub C: no transcripts available, skipping")
+                return
             raw = await loop.run_in_executor(
-                None, _call_gemini_sync, sys_c, qp_content, 1024
+                None, _call_gemini_sync, sys_c, transcript_content, 1024
             )
             parsed = _parse_json_safe(raw.strip())
             if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
