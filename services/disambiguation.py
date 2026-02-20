@@ -81,12 +81,29 @@ def _person_mentioned(text: str, person_name: Optional[str]) -> bool:
         return False
     normalized = _normalize(text)
     parts = _normalize(person_name).split()
-    # Full name match
+    # Full name match (contiguous) — strongest signal
     if _normalize(person_name) in normalized:
         return True
-    # Last name match
-    if len(parts) >= 2 and parts[-1] in normalized and len(parts[-1]) > 2:
-        return True
+    if len(parts) < 2:
+        return parts[0] in normalized if parts else False
+    # Proximity check: first + last must appear within 5 words of each other
+    # in the ORIGINAL text (not collapsed). This prevents "Josh Szeps... Israel"
+    # from matching "Josh Israel".
+    import re
+    words = re.findall(r'[a-zA-Z]+', text.lower())
+    first = parts[0]
+    last = parts[-1]
+    for i, w in enumerate(words):
+        if w == first:
+            # Check if last name appears within 5 words after first
+            window = words[i:i + 6]
+            if last in window:
+                return True
+        elif w == last:
+            # Check if first name appears within 5 words after last
+            window = words[i:i + 6]
+            if first in window:
+                return True
     return False
 
 
