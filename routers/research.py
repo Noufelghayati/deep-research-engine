@@ -5,7 +5,7 @@ import asyncio
 import logging
 import queue as queue_mod
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models.requests import ResearchRequest
@@ -17,6 +17,7 @@ from services.youtube_transcript import (
 )
 from utils.text import clean_transcript_text
 from config import settings
+from utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,8 @@ router = APIRouter(prefix="/api/v1", tags=["research"])
         "material from YouTube videos, articles, and Gemini analysis."
     ),
 )
-async def research(request: ResearchRequest) -> ResearchResponse:
+async def research(request: ResearchRequest, user: dict = Depends(get_current_user)) -> ResearchResponse:
+    request.user_id = user.get("email")
     start_time = time.time()
     try:
         result = await run_research(request)
@@ -64,7 +66,8 @@ async def research(request: ResearchRequest) -> ResearchResponse:
 
 
 @router.post("/research-stream", summary="Run research with SSE progress")
-async def research_stream(request: ResearchRequest):
+async def research_stream(request: ResearchRequest, user: dict = Depends(get_current_user)):
+    request.user_id = user.get("email")
     progress_q: asyncio.Queue = asyncio.Queue()
 
     async def on_progress(event_type: str, data: dict):

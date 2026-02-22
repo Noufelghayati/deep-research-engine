@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     claude_max_output_tokens: int = 64000
     claude_temperature: float = 0.3
 
+    # Auth
+    jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

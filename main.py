@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from routers.research import router as research_router
+from routers.auth import router as auth_router
+from database import init_db
 from config import settings
 import logging
 
@@ -27,7 +29,9 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+init_db()
 app.include_router(research_router)
+app.include_router(auth_router)
 
 
 @app.get("/", include_in_schema=False)

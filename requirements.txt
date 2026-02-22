@@ -9,3 +9,4 @@ youtube-transcript-api>=1.0.0
 yt-dlp>=2024.0.0
 google-genai>=1.0.0
 python-dotenv>=1.0.0
+PyJWT>=2.8.0
