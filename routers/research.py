@@ -75,6 +75,8 @@ async def research_stream(request: ResearchRequest, user: dict = Depends(get_cur
 
     async def generate():
         start_time = time.time()
+        heartbeat_interval = 15  # seconds
+        last_event_time = time.time()
         try:
             task = asyncio.create_task(run_research(request, on_progress=on_progress))
 
@@ -82,8 +84,12 @@ async def research_stream(request: ResearchRequest, user: dict = Depends(get_cur
                 try:
                     event = await asyncio.wait_for(progress_q.get(), timeout=0.5)
                     yield f"data: {json.dumps(event)}\n\n"
+                    last_event_time = time.time()
                 except asyncio.TimeoutError:
-                    pass
+                    # Send heartbeat to keep SSE connection alive during long ops
+                    if time.time() - last_event_time >= heartbeat_interval:
+                        yield f": heartbeat\n\n"
+                        last_event_time = time.time()
 
             # Drain remaining events
             while not progress_q.empty():
