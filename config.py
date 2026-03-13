@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # Auth
     jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
 
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""  # auto-created on first boot if empty
+    free_tier_dossier_limit: int = 2
+    paid_tier_dossier_limit: int = 50
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

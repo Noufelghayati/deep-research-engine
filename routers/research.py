@@ -18,6 +18,7 @@ from services.youtube_transcript import (
 from utils.text import clean_transcript_text
 from config import settings
 from utils.auth import get_current_user
+from routers.stripe_billing import can_generate_dossier, increment_dossier_count
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,24 @@ router = APIRouter(prefix="/api/v1", tags=["research"])
     ),
 )
 async def research(request: ResearchRequest, user: dict = Depends(get_current_user)) -> ResearchResponse:
+    # Usage gate
+    allowed, usage = can_generate_dossier(user["sub"])
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "dossier_limit_reached",
+                "subscription_status": usage["subscription_status"],
+                "dossier_count": usage["dossier_count"],
+                "dossier_limit": usage["dossier_limit"],
+            },
+        )
+
     request.user_id = user.get("email")
     start_time = time.time()
     try:
         result = await run_research(request)
+        increment_dossier_count(user["sub"])
         elapsed = time.time() - start_time
         logger.info(
             f"Research completed for {request.target_name} @ "
@@ -67,6 +82,19 @@ async def research(request: ResearchRequest, user: dict = Depends(get_current_us
 
 @router.post("/research-stream", summary="Run research with SSE progress")
 async def research_stream(request: ResearchRequest, user: dict = Depends(get_current_user)):
+    # Usage gate
+    allowed, usage = can_generate_dossier(user["sub"])
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "dossier_limit_reached",
+                "subscription_status": usage["subscription_status"],
+                "dossier_count": usage["dossier_count"],
+                "dossier_limit": usage["dossier_limit"],
+            },
+        )
+
     request.user_id = user.get("email")
     progress_q: asyncio.Queue = asyncio.Queue()
 
@@ -97,6 +125,7 @@ async def research_stream(request: ResearchRequest, user: dict = Depends(get_cur
                 yield f"data: {json.dumps(event)}\n\n"
 
             result = task.result()
+            increment_dossier_count(user["sub"])
             elapsed = round(time.time() - start_time, 1)
             yield f"data: {json.dumps({'type': 'result', 'elapsed': elapsed, 'data': result.model_dump()})}\n\n"
 
